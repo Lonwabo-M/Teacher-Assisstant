@@ -1,0 +1,5 @@
+{
+  "name": "Teacher Assisstant",
+  "description": "An AI-powered tool for teachers to generate structured lesson plans, slides, and worksheets from curriculum goals, aligned with CAPS or Cambridge standards.",
+  "requestFramePermissions": []
+}

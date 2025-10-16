@@ -4,6 +4,12 @@ import html2canvas from 'html2canvas';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import LatexRenderer from './LatexRenderer';
+import { forceKatexRender } from '../utils/latexUtils';
+
+// A helper to explicitly trigger a KaTeX render pass.
+const renderLatex = (element: HTMLElement | null) => {
+  forceKatexRender(element);
+};
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -18,9 +24,10 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
     setIsDownloading(true);
   
     try {
-      // CRITICAL FIX: Wait for LaTeX to render completely
+      // Trigger and wait for LaTeX rendering
+      renderLatex(planContainerRef.current);
       await new Promise(resolve => setTimeout(resolve, 2000));
-      await document.fonts.ready;
+      await document.fonts.ready.catch(() => console.warn('Font loading timeout'));
       await new Promise(resolve => setTimeout(resolve, 500));
   
       const canvas = await html2canvas(planContainerRef.current, { 
@@ -30,7 +37,6 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
         backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
-        allowTaint: true,
       });
       
       const imgData = canvas.toDataURL('image/png');

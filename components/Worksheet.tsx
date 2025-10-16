@@ -4,7 +4,6 @@ import html2canvas from 'html2canvas';
 import type { Worksheet, WorksheetQuestion, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
-import { waitForLatexRender } from '../utils/pdfHelpers';
 
 // Declare KaTeX's auto-render function, loaded from a script in index.html
 declare const renderMathInElement: any;
@@ -24,6 +23,108 @@ const triggerKatexRender = (element: HTMLElement | null) => {
     renderMathInElement(element, { delimiters: katexDelimiters, throwOnError: false });
   }
 };
+
+const createPdfFromElement = async (element: HTMLElement, filename: string) => {
+    const canvas = await html2canvas(element, { 
+      scale: 2,
+      windowHeight: element.scrollHeight,
+      windowWidth: element.scrollWidth,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+      allowTaint: true,
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'px', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+    heightLeft -= pdfHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+    
+    pdf.save(filename);
+}
+
+const downloadWithLatex = async (
+  targetRef: React.RefObject<HTMLDivElement>, 
+  filename: string, 
+  setLoadingState: () => void, 
+  clearLoadingState: () => void
+) => {
+  setLoadingState();
+
+  const element = targetRef.current;
+  if (!element) {
+    console.error("PDF generation target element not found.");
+    alert("Could not generate PDF: target element missing.");
+    clearLoadingState();
+    return;
+  }
+
+  const memoContainer = document.getElementById('memo-pdf-generator');
+  const isMemo = memoContainer && memoContainer.contains(element);
+  
+  // Store original styles
+  let originalClassName = '';
+  
+  if (isMemo && memoContainer) {
+    originalClassName = memoContainer.className;
+    
+    // Make visible but off-screen to ensure html2canvas can capture it properly
+    memoContainer.className = 'fixed top-[-9999px] left-[-9999px]';
+  }
+
+  try {
+    // Trigger KaTeX rendering to be safe
+    triggerKatexRender(element);
+
+    // CRITICAL: Wait longer for complex equations to render
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Wait for fonts to load, with a generous timeout
+    try {
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Font loading timed out')), 8000)
+        )
+      ]);
+    } catch (err) {
+      console.warn('Font loading issue:', err);
+    }
+
+    // Additional buffer for any final rendering adjustments
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Generate PDF from the prepared element
+    await createPdfFromElement(element, filename);
+
+  } catch (error) {
+    console.error("Error during PDF generation process:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while creating the PDF.";
+    alert(`Failed to generate PDF. ${errorMessage}`);
+  } finally {
+    // Restore original styles to the memo container
+    if (isMemo && memoContainer) {
+      memoContainer.className = originalClassName;
+    }
+    clearLoadingState();
+  }
+};
+
 
 interface WorksheetProps {
   worksheet: Worksheet;
@@ -121,108 +222,27 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
     // Trigger KaTeX rendering for the on-screen worksheet view
     triggerKatexRender(worksheetContentRef.current);
   }, [worksheet, chartData]);
+  
+  const handleDownloadWorksheet = () => {
+    downloadWithLatex(
+      worksheetContentRef,
+      `${worksheet.title.replace(/\s+/g, '_')}-worksheet.pdf`,
+      () => setIsDownloading('worksheet'),
+      () => setIsDownloading(null)
+    );
+  };
+
+  const handleDownloadMemo = () => {
+    downloadWithLatex(
+      memoRef,
+      `${worksheet.title.replace(/\s+/g, '_')}-memo.pdf`,
+      () => setIsDownloading('memo'),
+      () => setIsDownloading(null)
+    );
+  };
 
   const generalQuestions = worksheet.questions.filter(q => q.type !== 'source-based');
   const sourceBasedQuestions = worksheet.questions.filter(q => q.type === 'source-based');
-
-  const handleDownloadWorksheet = async () => {
-    if (!worksheetContentRef.current) return;
-    setIsDownloading('worksheet');
-  
-    try {
-      // CRITICAL FIX: Wait for LaTeX
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await document.fonts.ready;
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const canvas = await html2canvas(worksheetContentRef.current, { 
-        scale: 2,
-        windowHeight: worksheetContentRef.current.scrollHeight,
-        windowWidth: worksheetContentRef.current.scrollWidth,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'px', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-  
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
-  
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-      
-      pdf.save(`${worksheet.title.replace(/\s+/g, '_')}-worksheet.pdf`);
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Failed to generate PDF. Please try again.");
-    } finally {
-      setIsDownloading(null);
-    }
-  };
-  
-  const handleDownloadMemo = async () => {
-    if (!memoRef.current) return;
-    setIsDownloading('memo');
-  
-    try {
-      // CRITICAL FIX: Wait for LaTeX in hidden element
-      await new Promise(resolve => setTimeout(resolve, 2500));
-      await document.fonts.ready;
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const canvas = await html2canvas(memoRef.current, { 
-        scale: 2,
-        windowHeight: memoRef.current.scrollHeight,
-        windowWidth: memoRef.current.scrollWidth,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'px', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-  
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
-  
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-      
-      pdf.save(`${worksheet.title.replace(/\s+/g, '_')}-memo.pdf`);
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Failed to generate PDF. Please try again.");
-    } finally {
-      setIsDownloading(null);
-    }
-  };
-
 
   return (
     <>

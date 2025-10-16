@@ -1,9 +1,16 @@
 import React, { useRef, useState } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import type { Slide, UserInputs, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
-import { generateMultiPagePdf } from '../utils/pdfUtils';
 import LatexRenderer from './LatexRenderer';
+import { forceKatexRender } from '../utils/latexUtils';
+
+// A helper to explicitly trigger a KaTeX render pass.
+const renderLatex = (element: HTMLElement | null) => {
+  forceKatexRender(element);
+};
 
 interface SlidesProps {
   slides: Slide[];
@@ -14,35 +21,66 @@ interface SlidesProps {
 const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
   const slidesContainerRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const filename = 'presentation-slides.pdf';
 
   const handleDownload = async () => {
     if (!slidesContainerRef.current) return;
     setIsDownloading(true);
 
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'px',
+    });
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    const slideElements = Array.from(slidesContainerRef.current.querySelectorAll<HTMLElement>('.slide-card'));
+
     try {
-      // Explicitly cast the result to HTMLElement[] to resolve type inference issue.
-      const slideElements = Array.from(
-        slidesContainerRef.current.querySelectorAll('.slide-card')
-      ) as HTMLElement[];
+      for (let i = 0; i < slideElements.length; i++) {
+        const slide = slideElements[i] as HTMLElement;
+        const notesElement = slide.querySelector<HTMLElement>('.speaker-notes');
 
-      const blob = await generateMultiPagePdf(slideElements, {
-        filename: filename,
-        orientation: 'landscape',
-      });
+        if (notesElement) {
+          notesElement.style.display = 'none';
+        }
+
+        slide.style.width = '600px';
+        
+        // Render LaTeX and wait
+        renderLatex(slide);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await document.fonts.ready.catch(() => console.warn('Font timeout'));
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const canvas = await html2canvas(slide, { 
+          scale: 2,
+          logging: false,
+          useCORS: true,
+        });
+        
+        slide.style.width = '';
+        if (notesElement) {
+          notesElement.style.display = '';
+        }
+
+        const imgData = canvas.toDataURL('image/png');
+        
+        if (i > 0) {
+          pdf.addPage();
+        }
+        
+        const imgProps = pdf.getImageProperties(imgData);
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        let yPos = (pdfHeight - imgHeight) / 2;
+        if (yPos < 0) yPos = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, yPos, pdfWidth, imgHeight);
+      }
       
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
+      pdf.save('presentation-slides.pdf');
     } catch (error) {
-      console.error('PDF generation failed:', error);
-      alert('Failed to generate PDF. Please try again.');
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
     } finally {
       setIsDownloading(false);
     }

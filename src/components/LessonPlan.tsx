@@ -1,15 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
-import LatexRenderer from './LatexRenderer';
-import { forceKatexRender } from '../utils/latexUtils';
-
-// A helper to explicitly trigger a KaTeX render pass.
-const renderLatex = (element: HTMLElement | null) => {
-  forceKatexRender(element);
-};
+import { forceLatexRender, waitAndVerifyLatex } from '../utils/forceLatexRender';
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -19,26 +13,37 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
   const planContainerRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  useEffect(() => {
+    if (planContainerRef.current) {
+      forceLatexRender(planContainerRef.current);
+    }
+  }, [plan]);
+
   const handleDownload = async () => {
     if (!planContainerRef.current) return;
     setIsDownloading(true);
-  
+
     try {
-      // Trigger and wait for LaTeX rendering
-      renderLatex(planContainerRef.current);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await document.fonts.ready.catch(() => console.warn('Font loading timeout'));
-      await new Promise(resolve => setTimeout(resolve, 500));
-  
+      console.log('Starting PDF generation...');
+      
+      // Wait and verify LaTeX rendered
+      const latexRendered = await waitAndVerifyLatex(planContainerRef.current);
+      
+      if (!latexRendered) {
+        console.warn('LaTeX may not have rendered properly');
+      }
+
+      console.log('Capturing with html2canvas...');
       const canvas = await html2canvas(planContainerRef.current, { 
         scale: 2,
         windowHeight: planContainerRef.current.scrollHeight,
         windowWidth: planContainerRef.current.scrollWidth,
         backgroundColor: '#ffffff',
-        logging: false,
+        logging: true, // Enable logging to see what's happening
         useCORS: true,
       });
       
+      console.log('Canvas created, generating PDF...');
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'px', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -48,10 +53,10 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
       
       let heightLeft = imgHeight;
       let position = 0;
-  
+
       pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
       heightLeft -= pdfHeight;
-  
+
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
@@ -60,6 +65,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
       }
       
       pdf.save('lesson-plan.pdf');
+      console.log('PDF saved successfully');
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");
@@ -92,14 +98,14 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
         </button>
       </div>
 
-      <div ref={planContainerRef} className="space-y-8 bg-white p-6">
+      <div ref={planContainerRef} className="space-y-8">
         {plan.map((section, index) => (
           <div key={index} className="bg-slate-50 p-6 rounded-lg border border-slate-200">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-xl font-semibold text-sky-700">{section.title}</h3>
               <span className="text-sm font-medium text-slate-500 bg-slate-200 px-3 py-1 rounded-full">{section.duration}</span>
             </div>
-            <LatexRenderer content={section.content} className="text-slate-600 whitespace-pre-wrap" />
+            <div className="text-slate-600 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: section.content }} />
           </div>
         ))}
       </div>

@@ -1,18 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
-import { waitForLatexRender } from '../utils/pdfHelpers';
-
-// Declare KaTeX's auto-render function, loaded from a script in index.html
-declare const renderMathInElement: any;
-
-const katexDelimiters = [
-    { left: '$$', right: '$$', display: true },
-    { left: '\\[', right: '\\]', display: true },
-    { left: '\\(', right: '\\)', display: false },
-];
+import LatexRenderer from './LatexRenderer';
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -22,32 +13,26 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
   const planContainerRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  useEffect(() => {
-    // Trigger KaTeX rendering when the component mounts or the plan changes.
-    if (planContainerRef.current && typeof renderMathInElement === 'function') {
-      renderMathInElement(planContainerRef.current, {
-        delimiters: katexDelimiters,
-        throwOnError: false,
-      });
-    }
-  }, [plan]);
-
   const handleDownload = async () => {
     if (!planContainerRef.current) return;
     setIsDownloading(true);
-
+  
     try {
-      // CRITICAL: Wait for LaTeX to fully render
-      await waitForLatexRender(planContainerRef.current);
-
+      // CRITICAL FIX: Wait for LaTeX to render completely
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await document.fonts.ready;
+      await new Promise(resolve => setTimeout(resolve, 500));
+  
       const canvas = await html2canvas(planContainerRef.current, { 
         scale: 2,
-        // Ensure the canvas is created with the full height of the content
         windowHeight: planContainerRef.current.scrollHeight,
         windowWidth: planContainerRef.current.scrollWidth,
+        backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
+        allowTaint: true,
       });
+      
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'px', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -57,10 +42,10 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
       
       let heightLeft = imgHeight;
       let position = 0;
-
+  
       pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
       heightLeft -= pdfHeight;
-
+  
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
@@ -70,10 +55,10 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
       
       pdf.save('lesson-plan.pdf');
     } catch (error) {
-        console.error("Error generating PDF:", error);
-        alert("Failed to generate PDF. Please try again.");
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
     } finally {
-        setIsDownloading(false);
+      setIsDownloading(false);
     }
   };
 
@@ -91,8 +76,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
             {isDownloading ? (
               <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8
- 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             ) : (
               <DownloadIcon />
@@ -102,15 +86,14 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
         </button>
       </div>
 
-      <div ref={planContainerRef} className="space-y-8">
+      <div ref={planContainerRef} className="space-y-8 bg-white p-6">
         {plan.map((section, index) => (
           <div key={index} className="bg-slate-50 p-6 rounded-lg border border-slate-200">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-xl font-semibold text-sky-700">{section.title}</h3>
               <span className="text-sm font-medium text-slate-500 bg-slate-200 px-3 py-1 rounded-full">{section.duration}</span>
             </div>
-            {/* Use dangerouslySetInnerHTML to render content that includes LaTeX for KaTeX to process */}
-            <div className="text-slate-600 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: section.content }} />
+            <LatexRenderer content={section.content} className="text-slate-600 whitespace-pre-wrap" />
           </div>
         ))}
       </div>

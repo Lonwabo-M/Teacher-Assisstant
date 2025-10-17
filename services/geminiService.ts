@@ -115,8 +115,9 @@ const responseSchema = {
  */
 function cleanLatexInObject<T>(data: T): T {
   if (typeof data === 'string') {
-    // Fix common model error of `\ext{...}` instead of `\text{...}`
-    return data.replace(/\\ext\{/g, '\\text{') as unknown as T;
+    // Fix common model errors like `\ext{...}` instead of `\text{...}`
+    // and remove erroneous tab characters `\t` which can break parsing.
+    return data.replace(/\\ext\{/g, '\\text{').replace(/\t/g, ' ') as unknown as T;
   }
 
   if (Array.isArray(data)) {
@@ -172,29 +173,64 @@ export async function generateLesson(inputs: UserInputs): Promise<LessonData> {
         *   **Source-Based Analysis:** MANDATORY if source material is generated. 2-4 questions requiring deep analysis of the provided source, not just surface-level information retrieval. All questions in this section MUST have the type 'source-based'.
 
     **CRITICAL FORMATTING INSTRUCTION FOR SCIENTIFIC & MATHEMATICAL CONTENT:**
-    The final rendered output must look like a professional physics textbook. Adherence to the LaTeX rules below is mandatory to achieve this high-quality visual standard.
-    1.  **Delimiters:**
-        *   For **inline** math (e.g., a variable like \\(g\\) in a sentence), use \`\\(\`...\`\\)\`.
-        *   For **block** (centered, on its own line) equations, use \`\\[\`...\`\\]\`.
-    2.  **Absolute Rule:** Every single mathematical element, including variables (\\(F_g\\)), numbers (\\(9.8\\)), constants (\\(G\\)), and units (\\(\\text{m/s}^2\\)) MUST be wrapped in the appropriate LaTeX delimiters. NEVER mix plain text mathematical notation with regular text on the same line; wrap all math.
-    3.  **Syntax:**
-        *   **Fractions:** Use \`\\frac{numerator}{denominator}\`.
-        *   **Exponents/Subscripts:** Use \`^\` and \`_\`. Example: \`\\[r^2\\]\`, \`\\[m_1\\]\`.
-        *   **Multiplication:** Use \`\\times\`. Example: \`\\[6.67 \\times 10^{-11}\\]\`.
-        *   **Units:** ALWAYS use \`\\text{...}\` inside math delimiters. Example: \`\\[9.8 \\text{ m/s}^2\\]\`. For units like N m^2/kg^2, format it properly as \`\\[\\frac{\\text{N m}^2}{\\text{kg}^2}\\]\`.
-    4.  **Multi-step Calculations:** Show each step of a calculation on a new line. The descriptive text (like "Step 1:") should be plain text, and the equation that follows MUST be a block-level LaTeX expression.
-    5.  **Variable Definitions:** When a formula is introduced, you MUST define each variable clearly. Use a list format for this, with each variable on a new line.
-        *   **Example of a perfectly formatted formula definition:**
-            \`\`\`
-            The formula for Newton's Law of Universal Gravitation is:
-            \\[F = G \\frac{m_1 m_2}{r^2}\\]
-            Where:
-            * \\(F\\) is the gravitational force (\\(\\text{N}\\))
-            * \\(G\\) is the Universal Gravitational Constant (\\(6.67 \\times 10^{-11} \\text{ } \\frac{\\text{N m}^2}{\\text{kg}^2}\\))
-            * \\(m_1\\) is the mass of the first object (\\(\\text{kg}\\))
-            * \\(m_2\\) is the mass of the second object (\\(\\text{kg}\\))
-            * \\(r\\) is the distance between the centers of the two objects (\\(\\text{m}\\))
-            \`\`\`
+    The final rendered output must look like a professional physics textbook. Adherence to the LaTeX rules below is **MANDATORY** to achieve this high-quality visual standard. There are no exceptions.
+
+    **1. Delimiters:**
+    *   For **inline** math (e.g., a variable like \\(g\\) in a sentence), you MUST use \`\\(\`...\`\\)\`.
+    *   For **block** (centered, on its own line) equations, you MUST use \`\\[\`...\`\\]\`.
+    *   NEVER use \`$$\`...\`$$\` or \`$\`...\`$\`.
+
+    **2. Absolute Rule:**
+    *   Every single mathematical element—including single variables in text (\\(F_g\\)), numbers (\\(9.8\\)), constants (\\(G\\)), and units (\\(\\text{m/s}^2\\))—MUST be wrapped in the appropriate LaTeX delimiters. Do not mix plain text math with regular text.
+
+    **3. Syntax:**
+    *   **Fractions:** Use \`\\frac{numerator}{denominator}\`.
+    *   **Exponents/Subscripts:** Use \`^\` and \`_\`. Example: \`\\[r^2\\]\`, \`\\[m_1\\]\`.
+    *   **Multiplication:** Use \`\\times\`. Example: \`\\[6.67 \\times 10^{-11}\\]\`.
+    *   **Units:** ALWAYS use \`\\text{...}\` inside math delimiters. Example: \`\\[9.8 \\text{ m/s}^2\\]\`. For compound units like N m^2/kg^2, format it as a fraction: \`\\[\\frac{\\text{N m}^2}{\\text{kg}^2}\\]\`.
+
+    **4. Formula & Variable Definition Rules:**
+    *   When a formula is introduced, you MUST define each variable clearly using a list format.
+    *   **Example:**
+        \`\`\`
+        The formula for Newton's Law of Universal Gravitation is:
+        \\[F = G \\frac{m_1 m_2}{r^2}\\]
+        Where:
+        * \\(F\\) is the gravitational force (\\(\\text{N}\\))
+        * \\(G\\) is the Universal Gravitational Constant (\\(6.67 \\times 10^{-11} \\text{ } \\frac{\\text{N m}^2}{\\text{kg}^2}\\))
+        * \\(m_1\\) is the mass of the first object (\\(\\text{kg}\\))
+        * \\(m_2\\) is the mass of the second object (\\(\\text{kg}\\))
+        * \\(r\\) is the distance between the centers of the two objects (\\(\\text{m}\\))
+        \`\`\`
+    
+    **5. Gold Standard Example of a Multi-Step Calculation:**
+    *   This is the required format for all step-by-step calculations. It must be followed exactly.
+        \`\`\`
+        **Question:** Calculate the gravitational force between a \\(70 \\text{ kg}\\) student and a \\(50 \\text{ kg}\\) student sitting \\(0.5 \\text{ m}\\) apart.
+        
+        **Answer:**
+        Given:
+        * \\(m_1 = 70 \\text{ kg}\\)
+        * \\(m_2 = 50 \\text{ kg}\\)
+        * \\(r = 0.5 \\text{ m}\\)
+        * \\(G = 6.67 \\times 10^{-11} \\frac{\\text{Nm}^2}{\\text{kg}^2}\\)
+        
+        The formula for gravitational force is:
+        \\[F_g = G \\frac{m_1 m_2}{r^2}\\]
+        Substitute the values:
+        \\[F_g = (6.67 \\times 10^{-11}) \\frac{(70)(50)}{(0.5)^2}\\]
+        \\[F_g = (6.67 \\times 10^{-11}) \\frac{3500}{0.25}\\]
+        \\[F_g = (6.67 \\times 10^{-11}) (14000)\\]
+        \\[F_g = 9.338 \\times 10^{-7} \\text{ N}\\]
+        \`\`\`
+    
+    **6. Negative Examples (Incorrect Formatting):**
+    *   **WRONG:** \`The force is Fg = G * m1*m2 / r^2\` (Reason: No LaTeX delimiters.)
+    *   **WRONG:** \`The force is $F_g = G \\frac{m_1 m_2}{r^2}$\` (Reason: Uses forbidden \`$\` delimiters.)
+    *   **WRONG:** \`\\[F_g = 9.8 m/s^2\\]\` (Reason: Unit 'm/s^2' is not wrapped in \`\\text{...}\`.)
+    *   **CORRECT:** \`\\[F_g = 9.8 \\text{ m/s}^2\\]\`
+
+    This level of formatting precision is mandatory for all mathematical content.
 
     **Source Material and Chart Generation Rules:**
     - If **"Source-Based Questions Requested" is Yes**, you MUST create a relevant, high-quality primary or secondary source (e.g., a text excerpt, diary entry, data table). Populate the \`worksheet.source\` object.

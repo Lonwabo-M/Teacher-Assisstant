@@ -1,16 +1,10 @@
 import React, { useRef, useState } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { Slide, UserInputs, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
 import LatexRenderer from './LatexRenderer';
-import { forceKatexRender } from '../utils/latexUtils';
+import { generateMultiPagePdf } from '../utils/pdfUtils';
 
-// A helper to explicitly trigger a KaTeX render pass.
-const renderLatex = (element: HTMLElement | null) => {
-  forceKatexRender(element);
-};
 
 interface SlidesProps {
   slides: Slide[];
@@ -26,58 +20,23 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
     if (!slidesContainerRef.current) return;
     setIsDownloading(true);
 
-    const pdf = new jsPDF({
-      orientation: 'landscape',
-      unit: 'px',
-    });
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-
-    const slideElements = Array.from(slidesContainerRef.current.querySelectorAll<HTMLElement>('.slide-card'));
+    const slideElements = Array.from(slidesContainerRef.current.querySelectorAll('.slide-card')) as HTMLElement[];
 
     try {
-      for (let i = 0; i < slideElements.length; i++) {
-        const slide = slideElements[i] as HTMLElement;
-        const notesElement = slide.querySelector<HTMLElement>('.speaker-notes');
+      const blob = await generateMultiPagePdf(slideElements, {
+        filename: 'presentation-slides.pdf',
+        orientation: 'landscape'
+      });
 
-        if (notesElement) {
-          notesElement.style.display = 'none';
-        }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'presentation-slides.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-        slide.style.width = '600px';
-        
-        // Render LaTeX and wait
-        renderLatex(slide);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        await document.fonts.ready.catch(() => console.warn('Font timeout'));
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const canvas = await html2canvas(slide, { 
-          scale: 2,
-          logging: false,
-          useCORS: true,
-        });
-        
-        slide.style.width = '';
-        if (notesElement) {
-          notesElement.style.display = '';
-        }
-
-        const imgData = canvas.toDataURL('image/png');
-        
-        if (i > 0) {
-          pdf.addPage();
-        }
-        
-        const imgProps = pdf.getImageProperties(imgData);
-        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        let yPos = (pdfHeight - imgHeight) / 2;
-        if (yPos < 0) yPos = 0;
-
-        pdf.addImage(imgData, 'PNG', 0, yPos, pdfWidth, imgHeight);
-      }
-      
-      pdf.save('presentation-slides.pdf');
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");

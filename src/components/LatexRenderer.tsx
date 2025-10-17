@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { forceKatexRender, parseLatexString } from '../utils/latexUtils';
+import React, { useEffect, useRef } from 'react';
+import { parseLatexString, forceKatexRender } from '../utils/latexUtils';
 
 interface LatexRendererProps {
   content: string;
@@ -10,18 +10,18 @@ interface LatexRendererProps {
 const LatexRenderer: React.FC<LatexRendererProps & React.HTMLAttributes<HTMLElement>> = ({ content, className, as: Component = 'div', ...props }) => {
   const ref = useRef<HTMLElement>(null);
 
-  // We only re-run the effect to render LaTeX when the raw content changes.
   useEffect(() => {
     if (ref.current) {
+      // Manually find and render all LaTeX placeholders
       forceKatexRender(ref.current);
     }
-  }, [content]);
+  }, [content]); // Re-run when content changes
 
-  // We memoize the parsed content to avoid re-parsing on every render.
-  const parsedHtml = useMemo(() => parseLatexString(content), [content]);
+  // Parse the content to replace LaTeX with safe, renderable placeholders.
+  // This is safer than directly injecting raw HTML from the AI.
+  const safeHtml = parseLatexString(content);
 
-  // We need to cast `ref` to the specific component type; 'any' is a shortcut for this generic component pattern.
-  return <Component ref={ref as any} className={className} dangerouslySetInnerHTML={{ __html: parsedHtml }} {...props} />;
+  return <Component ref={ref as any} className={className} dangerouslySetInnerHTML={{ __html: safeHtml }} {...props} />;
 };
 
 export default LatexRenderer;

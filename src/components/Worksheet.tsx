@@ -2,8 +2,8 @@ import React, { useRef, useState } from 'react';
 import type { Worksheet, WorksheetQuestion, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
-import { generatePdf } from '../utils/pdfUtils';
 import LatexRenderer from './LatexRenderer';
+import { generatePdf } from '../utils/pdfUtils';
 
 interface WorksheetProps {
   worksheet: Worksheet;
@@ -38,9 +38,8 @@ const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ qu
 // A separate component for the printable memo to control styling for PDF generation
 const PrintableMemo: React.FC<{ 
   worksheet: Worksheet, 
-  chartData?: ChartData, 
   innerRef: React.RefObject<HTMLDivElement> 
-}> = ({ worksheet, chartData, innerRef }) => {
+}> = ({ worksheet, innerRef }) => {
 
   const generalQuestions = worksheet.questions.filter(q => q.type !== 'source-based');
   const sourceBasedQuestions = worksheet.questions.filter(q => q.type === 'source-based');
@@ -103,22 +102,29 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
   const generalQuestions = worksheet.questions.filter(q => q.type !== 'source-based');
   const sourceBasedQuestions = worksheet.questions.filter(q => q.type === 'source-based');
 
-  const handleDownload = async (
+  const downloadPdf = async (
     targetRef: React.RefObject<HTMLDivElement>,
     filename: string,
     setLoadingState: () => void,
-    clearLoadingState: () => void
+    clearLoadingState: () => void,
   ) => {
     setLoadingState();
+    const element = targetRef.current;
+    if (!element) {
+        alert("PDF generation failed: content element not found.");
+        clearLoadingState();
+        return;
+    }
+
     try {
-      const blob = await generatePdf(targetRef.current, { filename, orientation: 'portrait' });
+      const blob = await generatePdf(element, { filename });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('PDF generation failed:', error);
@@ -132,8 +138,8 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
   return (
     <>
       {/* Hidden container for generating the memo PDF. */}
-      <div id="memo-pdf-generator" className="absolute opacity-0 -z-10 pointer-events-none">
-          <PrintableMemo worksheet={worksheet} chartData={chartData} innerRef={memoRef} />
+      <div id="memo-pdf-generator" className="absolute -left-[9999px] top-auto">
+          <PrintableMemo worksheet={worksheet} innerRef={memoRef} />
       </div>
 
       <div className="space-y-6">
@@ -141,7 +147,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
           <LatexRenderer as="h2" content={worksheet.title} className="text-3xl font-bold text-slate-800" />
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => handleDownload(
+              onClick={() => downloadPdf(
                 worksheetContentRef, 
                 `${worksheet.title.replace(/\s+/g, '_')}-worksheet.pdf`,
                 () => setIsDownloading('worksheet'),
@@ -161,7 +167,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
               <span>Download Worksheet</span>
             </button>
              <button
-              onClick={() => handleDownload(
+              onClick={() => downloadPdf(
                 memoRef, 
                 `${worksheet.title.replace(/\s+/g, '_')}-memo.pdf`,
                 () => setIsDownloading('memo'),

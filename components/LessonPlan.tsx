@@ -1,18 +1,10 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
-import { waitForLatexRender } from '../utils/pdfHelpers';
-
-// Declare KaTeX's auto-render function, loaded from a script in index.html
-declare const renderMathInElement: any;
-
-const katexDelimiters = [
-    { left: '$$', right: '$$', display: true },
-    { left: '\\[', right: '\\]', display: true },
-    { left: '\\(', right: '\\)', display: false },
-];
+import { waitAndVerifyLatex } from '../utils/forceLatexRender';
+import LatexRenderer from './LatexRenderer';
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -22,32 +14,30 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
   const planContainerRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  useEffect(() => {
-    // Trigger KaTeX rendering when the component mounts or the plan changes.
-    if (planContainerRef.current && typeof renderMathInElement === 'function') {
-      renderMathInElement(planContainerRef.current, {
-        delimiters: katexDelimiters,
-        throwOnError: false,
-      });
-    }
-  }, [plan]);
-
   const handleDownload = async () => {
     if (!planContainerRef.current) return;
     setIsDownloading(true);
 
     try {
-      // CRITICAL: Wait for LaTeX to fully render
-      await waitForLatexRender(planContainerRef.current);
+      console.log('Starting PDF generation for Lesson Plan...');
+      
+      const latexRendered = await waitAndVerifyLatex(planContainerRef.current);
+      
+      if (!latexRendered) {
+        console.warn('LaTeX may not have rendered properly, but proceeding with PDF generation anyway.');
+      }
 
+      console.log('Capturing Lesson Plan with html2canvas...');
       const canvas = await html2canvas(planContainerRef.current, { 
         scale: 2,
-        // Ensure the canvas is created with the full height of the content
         windowHeight: planContainerRef.current.scrollHeight,
         windowWidth: planContainerRef.current.scrollWidth,
-        logging: false,
+        backgroundColor: '#ffffff',
+        logging: true,
         useCORS: true,
       });
+      
+      console.log('Canvas created, generating PDF...');
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'px', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -69,11 +59,12 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
       }
       
       pdf.save('lesson-plan.pdf');
+      console.log('PDF saved successfully');
     } catch (error) {
-        console.error("Error generating PDF:", error);
-        alert("Failed to generate PDF. Please try again.");
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
     } finally {
-        setIsDownloading(false);
+      setIsDownloading(false);
     }
   };
 
@@ -91,8 +82,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
             {isDownloading ? (
               <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8
- 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             ) : (
               <DownloadIcon />
@@ -109,8 +99,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
               <h3 className="text-xl font-semibold text-sky-700">{section.title}</h3>
               <span className="text-sm font-medium text-slate-500 bg-slate-200 px-3 py-1 rounded-full">{section.duration}</span>
             </div>
-            {/* Use dangerouslySetInnerHTML to render content that includes LaTeX for KaTeX to process */}
-            <div className="text-slate-600 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: section.content }} />
+            <LatexRenderer content={section.content} className="text-slate-600 whitespace-pre-wrap" />
           </div>
         ))}
       </div>

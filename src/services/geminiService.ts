@@ -115,8 +115,9 @@ const responseSchema = {
  */
 function cleanLatexInObject<T>(data: T): T {
   if (typeof data === 'string') {
-    // Fix common model error of `\ext{...}` instead of `\text{...}`
-    return data.replace(/\\ext\{/g, '\\text{') as unknown as T;
+    // Fix common model errors like `\ext{...}` instead of `\text{...}`
+    // and remove erroneous tab characters `\t` which can break parsing.
+    return data.replace(/\\ext\{/g, '\\text{').replace(/\t/g, ' ') as unknown as T;
   }
 
   if (Array.isArray(data)) {

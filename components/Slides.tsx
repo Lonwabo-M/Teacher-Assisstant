@@ -1,19 +1,11 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { Slide, UserInputs, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
-import { waitForLatexRender } from '../utils/pdfHelpers';
-
-// Declare KaTeX's auto-render function, loaded from a script in index.html
-declare const renderMathInElement: any;
-
-const katexDelimiters = [
-    { left: '$$', right: '$$', display: true },
-    { left: '\\[', right: '\\]', display: true },
-    { left: '\\(', right: '\\)', display: false },
-];
+import LatexRenderer from './LatexRenderer';
+import { waitAndVerifyLatex } from '../utils/forceLatexRender';
 
 interface SlidesProps {
   slides: Slide[];
@@ -24,16 +16,6 @@ interface SlidesProps {
 const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
   const slidesContainerRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-
-  useEffect(() => {
-    // Trigger KaTeX rendering when the component mounts or the slides change.
-    if (slidesContainerRef.current && typeof renderMathInElement === 'function') {
-      renderMathInElement(slidesContainerRef.current, {
-        delimiters: katexDelimiters,
-        throwOnError: false,
-      });
-    }
-  }, [slides, chartData]);
 
   const handleDownload = async () => {
     if (!slidesContainerRef.current) return;
@@ -53,16 +35,16 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
         const slide = slideElements[i] as HTMLElement;
         const notesElement = slide.querySelector<HTMLElement>('.speaker-notes');
 
+        // Temporarily hide speaker notes for capture
         if (notesElement) {
           notesElement.style.display = 'none';
         }
 
+        // Set a fixed width for consistent rendering by html2canvas
         slide.style.width = '600px';
         
-        // CRITICAL FIX: Wait for LaTeX rendering
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        await document.fonts.ready;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Use the robust wait-and-verify utility for LaTeX rendering
+        await waitAndVerifyLatex(slide);
         
         const canvas = await html2canvas(slide, { 
           scale: 2,
@@ -71,6 +53,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
           allowTaint: true,
         });
         
+        // Restore original styles
         slide.style.width = '';
         if (notesElement) {
           notesElement.style.display = '';
@@ -126,14 +109,14 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
         {slides.map((slide, index) => (
           <div key={index} className="slide-card flex flex-col bg-white p-6 rounded-lg shadow-md border border-slate-200">
             <div className="relative flex-shrink-0">
-              <h3 className="text-2xl font-bold text-sky-800 pr-16 z-10 relative" dangerouslySetInnerHTML={{ __html: slide.title }}></h3>
+              <LatexRenderer as="h3" content={slide.title} className="text-2xl font-bold text-sky-800 pr-16 z-10 relative" />
               <span className="absolute -top-2 right-0 text-7xl font-black text-slate-100 select-none z-0">
                 {String(index + 1).padStart(2, '0')}
               </span>
             </div>
             
             <div className="flex-grow space-y-3 mt-4">
-              <p className="text-md text-slate-500 italic" dangerouslySetInnerHTML={{ __html: `<strong>Key Concept:</strong> ${slide.keyConcept}` }}></p>
+              <LatexRenderer as="p" content={`<strong>Key Concept:</strong> ${slide.keyConcept}`} className="text-md text-slate-500 italic" />
               
               <ul className="list-disc list-inside text-slate-700 space-y-2 pt-2">
                 {index === 0 ? (
@@ -144,7 +127,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
                   </>
                 ) : (
                   slide.content.map((point, pointIndex) => (
-                    <li key={pointIndex} dangerouslySetInnerHTML={{ __html: point }}></li>
+                    <LatexRenderer as="li" key={pointIndex} content={point} />
                   ))
                 )}
               </ul>
@@ -155,7 +138,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                   Speaker Notes
                 </h4>
-                <div className="text-sm text-slate-500 whitespace-pre-wrap mt-1 pl-6" dangerouslySetInnerHTML={{ __html: slide.speakerNotes }}></div>
+                <LatexRenderer content={slide.speakerNotes} className="text-sm text-slate-500 whitespace-pre-wrap mt-1 pl-6" />
               </div>
             )}
           </div>

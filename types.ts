@@ -59,3 +59,8 @@ export interface LessonData {
   worksheet: Worksheet;
   chartData?: ChartData;
 }
+
+export interface PdfOptions {
+  filename: string;
+  orientation?: 'portrait' | 'landscape';
+}

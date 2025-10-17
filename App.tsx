@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { generateLesson } from './services/geminiService';
 import type { LessonData, UserInputs } from './types';
 import Header from './components/Header';
@@ -17,30 +17,14 @@ const defaultInputs: UserInputs = {
   includeChart: false,
 };
 
-
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lessonData, setLessonData] = useState<LessonData | null>(null);
+  // Use in-memory state instead of localStorage
   const [lessonHistory, setLessonHistory] = useState<LessonData[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [currentInputs, setCurrentInputs] = useState<UserInputs>(defaultInputs);
-
-  useEffect(() => {
-    try {
-      const storedHistory = localStorage.getItem('lessonHistory');
-      if (storedHistory) {
-        const parsedHistory = JSON.parse(storedHistory) as LessonData[];
-        // Data validation: Filter out any old history items that don't have the `inputs` field.
-        // This prevents errors if the user has data from a previous version of the app.
-        const validHistory = parsedHistory.filter(item => item && typeof item === 'object' && item.inputs);
-        setLessonHistory(validHistory);
-      }
-    } catch (e) {
-      console.error("Failed to parse lesson history from localStorage", e);
-      setLessonHistory([]); // Clear history on parsing error
-    }
-  }, []);
 
   const handleGenerateLesson = useCallback(async (inputs: UserInputs) => {
     setIsLoading(true);
@@ -55,11 +39,8 @@ const App: React.FC = () => {
       };
       setLessonData(newLesson);
       
-      setLessonHistory(prevHistory => {
-        const newHistory = [newLesson, ...prevHistory.slice(0, 9)];
-        localStorage.setItem('lessonHistory', JSON.stringify(newHistory));
-        return newHistory;
-      });
+      // Store in memory only, keep last 10 lessons
+      setLessonHistory(prevHistory => [newLesson, ...prevHistory.slice(0, 9)]);
 
     } catch (err) {
       console.error(err);
@@ -77,7 +58,6 @@ const App: React.FC = () => {
 
   const handleClearHistory = () => {
     setLessonHistory([]);
-    localStorage.removeItem('lessonHistory');
     setLessonData(null);
     setCurrentInputs(defaultInputs); // Reset the form to its default state
   }

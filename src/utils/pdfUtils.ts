@@ -18,7 +18,7 @@ const createHtmlDocument = (contentHtml: string, title: string, customStyles: st
       <meta charset="UTF-8" />
       <title>${title}</title>
       <script src="https://cdn.tailwindcss.com"></script>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
       <style>
         body {
           font-family: sans-serif;

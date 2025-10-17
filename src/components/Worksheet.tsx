@@ -101,36 +101,31 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
 
   const generalQuestions = worksheet.questions.filter(q => q.type !== 'source-based');
   const sourceBasedQuestions = worksheet.questions.filter(q => q.type === 'source-based');
+  
+  const handleDownload = async (type: 'worksheet' | 'memo') => {
+    const targetRef = type === 'worksheet' ? worksheetContentRef : memoRef;
+    const filename = `${worksheet.title.replace(/\s+/g, '_')}-${type}.pdf`;
 
-  const downloadPdf = async (
-    targetRef: React.RefObject<HTMLDivElement>,
-    filename: string,
-    setLoadingState: () => void,
-    clearLoadingState: () => void,
-  ) => {
-    setLoadingState();
-    const element = targetRef.current;
-    if (!element) {
+    if (!targetRef.current) {
         alert("PDF generation failed: content element not found.");
-        clearLoadingState();
         return;
     }
-
+    
+    setIsDownloading(type);
     try {
-      const blob = await generatePdf(element, { filename });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+        const pdfBlob = await generatePdf(targetRef.current, { filename });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
     } catch (error) {
-      console.error('PDF generation failed:', error);
-      alert('Failed to generate PDF. Please try again.');
+        console.error(`Error generating ${type} PDF:`, error);
+        alert(`Failed to generate ${type} PDF. Please try again.`);
     } finally {
-      clearLoadingState();
+        setIsDownloading(null);
     }
   };
 
@@ -138,7 +133,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
   return (
     <>
       {/* Hidden container for generating the memo PDF. */}
-      <div id="memo-pdf-generator" className="absolute -left-[9999px] top-auto">
+      <div className="absolute top-[-9999px] left-[-9999px] opacity-0 -z-10 pointer-events-none">
           <PrintableMemo worksheet={worksheet} innerRef={memoRef} />
       </div>
 
@@ -147,12 +142,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
           <LatexRenderer as="h2" content={worksheet.title} className="text-3xl font-bold text-slate-800" />
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => downloadPdf(
-                worksheetContentRef, 
-                `${worksheet.title.replace(/\s+/g, '_')}-worksheet.pdf`,
-                () => setIsDownloading('worksheet'),
-                () => setIsDownloading(null)
-              )}
+              onClick={() => handleDownload('worksheet')}
               disabled={!!isDownloading}
               className="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg shadow-sm hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Download worksheet as PDF"
@@ -167,12 +157,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
               <span>Download Worksheet</span>
             </button>
              <button
-              onClick={() => downloadPdf(
-                memoRef, 
-                `${worksheet.title.replace(/\s+/g, '_')}-memo.pdf`,
-                () => setIsDownloading('memo'),
-                () => setIsDownloading(null)
-              )}
+              onClick={() => handleDownload('memo')}
               disabled={!!isDownloading}
               className="inline-flex items-center px-4 py-2 bg-sky-100 text-sky-700 text-sm font-semibold rounded-lg shadow-sm hover:bg-sky-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Download answer memo as PDF"

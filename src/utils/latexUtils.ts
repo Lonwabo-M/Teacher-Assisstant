@@ -1,60 +1,29 @@
-// Utility functions for LaTeX rendering with KaTeX
-
-// Declare KaTeX's global object, loaded from a script in index.html
-declare const katex: any;
+import katex from 'katex';
 
 /**
- * Parses a string with LaTeX delimiters and converts them to HTML placeholders for manual rendering.
- * This is safer than dangerously setting raw user content and gives us control over the rendering process.
- * @param text The input string which may contain LaTeX and other HTML.
- * @returns An HTML string with <span/div data-latex="..."> tags.
+ * Takes a string containing potential LaTeX expressions and pre-renders them to HTML using KaTeX.
+ * This is the most robust method for handling LaTeX as it avoids client-side rendering race conditions.
+ * @param content The input string which may contain LaTeX and other HTML.
+ * @returns An HTML string with all LaTeX expressions converted to KaTeX's HTML markup.
  */
-export const parseLatexString = (text: string): string => {
-  if (!text) return '';
-  // This regex finds block \[...\] and inline \(...\) LaTeX expressions non-greedily.
-  const regex = /\\\[(.*?)\\\]|\\\((.*?)\\\)/gs;
-  return text.replace(regex, (match, blockContent, inlineContent) => {
-    if (blockContent !== undefined) {
-      // Escape quotes and HTML tags for the data attribute
-      const escapedContent = blockContent.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<div data-latex="${escapedContent}"></div>`;
-    }
-    if (inlineContent !== undefined) {
-      const escapedContent = inlineContent.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<span data-latex="${escapedContent}"></span>`;
-    }
-    return match; // Should not happen with this regex, but as a fallback.
-  });
-};
-
-
-/**
- * Manually and forcefully renders all LaTeX placeholders within a given container element.
- * This function is idempotent; it will not re-render elements that have already been processed.
- */
-export const forceKatexRender = (container: HTMLElement | null): void => {
-  if (!container || typeof katex === 'undefined') return;
-
-  // Find all elements with data-latex attributes that haven't been rendered yet
-  const unrenderedMath = container.querySelectorAll('[data-latex]:not(.katex-rendered)');
+export const preRenderLatex = (content: string): string => {
+  if (!content) return '';
   
-  unrenderedMath.forEach(element => {
-    let latex: string | null = null;
+  // This regex finds block \[...\] and inline \(...\) LaTeX expressions non-greedily.
+  return content.replace(/\\\[(.*?)\\\]|\\\((.*?)\\\)/gs, (match, blockContent, inlineContent) => {
+    const latex = blockContent || inlineContent;
+    if (latex === undefined) return match;
+    
     try {
-      latex = element.getAttribute('data-latex');
-      if (latex) {
-        katex.render(latex, element as HTMLElement, {
-          displayMode: element.tagName === 'DIV',
-          throwOnError: false,
-        });
-        // Add a class to mark as rendered to avoid re-rendering on subsequent calls
-        element.classList.add('katex-rendered');
-      }
-    } catch (error) {
-      console.warn('KaTeX render error:', error, 'for latex:', latex);
-      if (element.textContent === '') {
-        element.textContent = `[KaTeX Error: ${latex}]`;
-      }
+      // Use katex.renderToString to convert the LaTeX string directly into an HTML string.
+      return katex.renderToString(latex, {
+        displayMode: !!blockContent, // True for block-level `\[...\]`, false for inline `\(...\)`
+        throwOnError: false, // Don't crash the app if there's a syntax error
+      });
+    } catch (e) {
+      console.error("KaTeX pre-rendering failed:", e);
+      // Return a helpful error message in place of the broken math
+      return `<span style="color: red;">[KaTeX Error: ${latex}]</span>`;
     }
   });
 };

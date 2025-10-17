@@ -5,7 +5,6 @@ import Chart from './Chart';
 import LatexRenderer from './LatexRenderer';
 import { generateMultiPagePdf } from '../utils/pdfUtils';
 
-
 interface SlidesProps {
   slides: Slide[];
   inputs: UserInputs;
@@ -20,23 +19,22 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
     if (!slidesContainerRef.current) return;
     setIsDownloading(true);
 
-    const slideElements = Array.from(slidesContainerRef.current.querySelectorAll('.slide-card')) as HTMLElement[];
+    const slideElements = Array.from(
+      slidesContainerRef.current.querySelectorAll('.slide-card')
+    ) as HTMLElement[];
 
     try {
-      const blob = await generateMultiPagePdf(slideElements, {
-        filename: 'presentation-slides.pdf',
-        orientation: 'landscape'
+      const pdfBlob = await generateMultiPagePdf(slideElements, { 
+          filename: 'presentation-slides.pdf',
+          orientation: 'landscape'
       });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'presentation-slides.pdf';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(pdfBlob);
+      link.download = 'presentation-slides.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");

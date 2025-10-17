@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
-import { generatePdf } from '../utils/pdfUtils';
 import LatexRenderer from './LatexRenderer';
+import { generatePdf } from '../utils/pdfUtils';
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -17,15 +17,14 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
     setIsDownloading(true);
 
     try {
-      const blob = await generatePdf(planContainerRef.current, { filename: 'lesson-plan.pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'lesson-plan.pdf';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const pdfBlob = await generatePdf(planContainerRef.current, { filename: 'lesson-plan.pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(pdfBlob);
+      link.download = 'lesson-plan.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");

@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import LatexRenderer from './LatexRenderer';
-import { generatePdf } from '../utils/pdfUtils';
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -17,14 +18,35 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
     setIsDownloading(true);
 
     try {
-      const pdfBlob = await generatePdf(planContainerRef.current, { filename: 'lesson-plan.pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(pdfBlob);
-      link.download = 'lesson-plan.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
+      const canvas = await html2canvas(planContainerRef.current, { 
+        scale: 2,
+        windowHeight: planContainerRef.current.scrollHeight,
+        windowWidth: planContainerRef.current.scrollWidth,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'px', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+      
+      pdf.save('lesson-plan.pdf');
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");
@@ -57,7 +79,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
         </button>
       </div>
 
-      <div ref={planContainerRef} className="space-y-8">
+      <div ref={planContainerRef} className="space-y-8 p-4">
         {plan.map((section, index) => (
           <div key={index} className="bg-slate-50 p-6 rounded-lg border border-slate-200">
             <div className="flex justify-between items-center mb-2">

@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import type { Slide, UserInputs, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
 import LatexRenderer from './LatexRenderer';
-import { generateMultiPagePdf } from '../utils/pdfUtils';
 
 interface SlidesProps {
   slides: Slide[];
@@ -19,22 +20,57 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
     if (!slidesContainerRef.current) return;
     setIsDownloading(true);
 
-    const slideElements = Array.from(
-      slidesContainerRef.current.querySelectorAll('.slide-card')
-    ) as HTMLElement[];
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'px',
+    });
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    const slideElements = Array.from(slidesContainerRef.current.querySelectorAll<HTMLElement>('.slide-card'));
 
     try {
-      const pdfBlob = await generateMultiPagePdf(slideElements, { 
-          filename: 'presentation-slides.pdf',
-          orientation: 'landscape'
-      });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(pdfBlob);
-      link.download = 'presentation-slides.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
+      for (let i = 0; i < slideElements.length; i++) {
+        const slide = slideElements[i] as HTMLElement;
+        const notesElement = slide.querySelector<HTMLElement>('.speaker-notes');
+
+        // Temporarily hide speaker notes for capture
+        if (notesElement) {
+          notesElement.style.display = 'none';
+        }
+
+        // Set a fixed width for consistent rendering by html2canvas
+        slide.style.width = '600px';
+        
+        const canvas = await html2canvas(slide, { 
+          scale: 2,
+          logging: false,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+        });
+        
+        // Restore original styles
+        slide.style.width = '';
+        if (notesElement) {
+          notesElement.style.display = '';
+        }
+
+        const imgData = canvas.toDataURL('image/png');
+        
+        if (i > 0) {
+          pdf.addPage();
+        }
+        
+        const imgProps = pdf.getImageProperties(imgData);
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        let yPos = (pdfHeight - imgHeight) / 2;
+        if (yPos < 0) yPos = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, yPos, pdfWidth, imgHeight);
+      }
+      
+      pdf.save('presentation-slides.pdf');
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");

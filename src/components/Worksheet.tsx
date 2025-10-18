@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import type { Worksheet, WorksheetQuestion, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
 import LatexRenderer from './LatexRenderer';
-import { generatePdf } from '../utils/pdfUtils';
 
 interface WorksheetProps {
   worksheet: Worksheet;
@@ -38,8 +39,9 @@ const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ qu
 // A separate component for the printable memo to control styling for PDF generation
 const PrintableMemo: React.FC<{ 
   worksheet: Worksheet, 
+  chartData?: ChartData, 
   innerRef: React.RefObject<HTMLDivElement> 
-}> = ({ worksheet, innerRef }) => {
+}> = ({ worksheet, chartData, innerRef }) => {
 
   const generalQuestions = worksheet.questions.filter(q => q.type !== 'source-based');
   const sourceBasedQuestions = worksheet.questions.filter(q => q.type === 'source-based');
@@ -101,31 +103,75 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
 
   const generalQuestions = worksheet.questions.filter(q => q.type !== 'source-based');
   const sourceBasedQuestions = worksheet.questions.filter(q => q.type === 'source-based');
-  
-  const handleDownload = async (type: 'worksheet' | 'memo') => {
-    const targetRef = type === 'worksheet' ? worksheetContentRef : memoRef;
-    const filename = `${worksheet.title.replace(/\s+/g, '_')}-${type}.pdf`;
 
-    if (!targetRef.current) {
+  const handleDownload = async (
+    targetRef: React.RefObject<HTMLDivElement>,
+    filename: string,
+    setLoadingState: () => void,
+    clearLoadingState: () => void,
+    isMemo: boolean = false
+  ) => {
+    setLoadingState();
+    const element = targetRef.current;
+    if (!element) {
         alert("PDF generation failed: content element not found.");
+        clearLoadingState();
         return;
     }
-    
-    setIsDownloading(type);
+
+    let memoContainer: HTMLElement | null = null;
+    let originalMemoClasses = '';
+    // If we're printing the memo, we need to temporarily make its container visible but off-screen
+    // so that html2canvas can render it properly.
+    if (isMemo) {
+        memoContainer = document.getElementById('memo-pdf-generator');
+        if (memoContainer) {
+            originalMemoClasses = memoContainer.className;
+            // This class moves the element off-screen but makes it available for rendering.
+            memoContainer.className = 'fixed top-[-9999px] left-[-9999px] z-0 block';
+        }
+    }
+
     try {
-        const pdfBlob = await generatePdf(targetRef.current, { filename });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(pdfBlob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
+      const canvas = await html2canvas(element, { 
+        scale: 2,
+        windowHeight: element.scrollHeight,
+        windowWidth: element.scrollWidth,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'px', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Handle multi-page PDFs
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+      
+      pdf.save(filename);
     } catch (error) {
-        console.error(`Error generating ${type} PDF:`, error);
-        alert(`Failed to generate ${type} PDF. Please try again.`);
+      console.error('PDF generation failed:', error);
+      alert('Failed to generate PDF. Please try again.');
     } finally {
-        setIsDownloading(null);
+      // Restore the original state of the memo container
+      if (isMemo && memoContainer) {
+          memoContainer.className = originalMemoClasses;
+      }
+      clearLoadingState();
     }
   };
 
@@ -133,8 +179,8 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
   return (
     <>
       {/* Hidden container for generating the memo PDF. */}
-      <div className="absolute top-[-9999px] left-[-9999px] opacity-0 -z-10 pointer-events-none">
-          <PrintableMemo worksheet={worksheet} innerRef={memoRef} />
+      <div id="memo-pdf-generator" className="absolute opacity-0 -z-10 pointer-events-none">
+          <PrintableMemo worksheet={worksheet} chartData={chartData} innerRef={memoRef} />
       </div>
 
       <div className="space-y-6">
@@ -142,7 +188,12 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
           <LatexRenderer as="h2" content={worksheet.title} className="text-3xl font-bold text-slate-800" />
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => handleDownload('worksheet')}
+              onClick={() => handleDownload(
+                worksheetContentRef, 
+                `${worksheet.title.replace(/\s+/g, '_')}-worksheet.pdf`,
+                () => setIsDownloading('worksheet'),
+                () => setIsDownloading(null)
+              )}
               disabled={!!isDownloading}
               className="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg shadow-sm hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Download worksheet as PDF"
@@ -157,7 +208,13 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
               <span>Download Worksheet</span>
             </button>
              <button
-              onClick={() => handleDownload('memo')}
+              onClick={() => handleDownload(
+                memoRef, 
+                `${worksheet.title.replace(/\s+/g, '_')}-memo.pdf`,
+                () => setIsDownloading('memo'),
+                () => setIsDownloading(null),
+                true
+              )}
               disabled={!!isDownloading}
               className="inline-flex items-center px-4 py-2 bg-sky-100 text-sky-700 text-sm font-semibold rounded-lg shadow-sm hover:bg-sky-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Download answer memo as PDF"
@@ -174,7 +231,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
           </div>
         </div>
 
-        <div ref={worksheetContentRef} className="p-4 bg-white">
+        <div ref={worksheetContentRef} className="p-8 bg-white font-serif">
           {chartData && (
              <div className="mb-8 border border-slate-300 bg-slate-50 rounded-lg p-6">
               <h3 className="text-xl font-bold text-slate-700 mb-4">Source Material: Chart</h3>
@@ -190,12 +247,12 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
               <LatexRenderer content={worksheet.source.content} className="prose prose-sm max-w-none text-slate-600 whitespace-pre-wrap" />
             </div>
           )}
-          <div className="bg-sky-50 border-l-4 border-sky-500 text-sky-800 p-4 rounded-r-lg">
+          <div className="bg-sky-50 border-l-4 border-sky-500 text-sky-800 p-4 rounded-r-lg mb-8">
             <h3 className="font-bold">Instructions</h3>
             <LatexRenderer as="p" content={worksheet.instructions} />
           </div>
           
-          <div className="mt-8 space-y-8">
+          <div className="space-y-8">
               {generalQuestions.length > 0 && (
                 <section>
                   <h3 className="text-xl font-bold text-slate-800 mb-4 px-1">General Questions</h3>

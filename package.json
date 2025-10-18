@@ -12,9 +12,9 @@
     "react-dom": "^19.2.0",
     "react": "^19.2.0",
     "@google/genai": "^1.24.0",
-    "katex": "0.16.9",
     "jspdf": "^3.0.3",
-    "html2canvas": "^1.4.1"
+    "html2canvas": "^1.4.1",
+    "katex": "^0.16.25"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

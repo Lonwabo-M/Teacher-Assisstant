@@ -18,12 +18,12 @@ const PrintableLessonPlan: React.FC<{ plan: LessonPlanSection[] }> = ({ plan }) 
     <h1 className="text-center font-bold mb-10" style={{ fontSize: '24pt' }}>Lesson Plan</h1>
     <div className="space-y-8">
       {plan.map((section, index) => (
-        <div key={index} className="border-b-2 border-slate-200 pb-4 last:border-b-0">
+        <div key={index} className="border-b-2 border-slate-200 pb-4 last:border-b-0" style={{ breakInside: 'avoid' }}>
           <div className="flex justify-between items-start mb-3">
             <h3 className="font-semibold text-sky-800" style={{ fontSize: '16pt' }}>{section.title}</h3>
             <span className="text-base font-medium text-slate-600 flex-shrink-0 ml-4 bg-slate-100 px-3 py-1 rounded-md">{section.duration}</span>
           </div>
-          <LatexRenderer content={section.content} className="text-slate-800 whitespace-pre-wrap" style={{ lineHeight: 1.6 }}/>
+          <LatexRenderer content={section.content} className="text-slate-800 whitespace-pre-wrap" style={{ lineHeight: 1.6 }} enableMarkdown={true}/>
         </div>
       ))}
     </div>
@@ -113,7 +113,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan }) => {
                 <h3 className="text-xl font-semibold text-sky-700">{section.title}</h3>
                 <span className="text-sm font-medium text-slate-500 bg-slate-200 px-3 py-1 rounded-full">{section.duration}</span>
               </div>
-              <LatexRenderer content={section.content} className="text-slate-600 whitespace-pre-wrap" />
+              <LatexRenderer content={section.content} className="text-slate-600 whitespace-pre-wrap" enableMarkdown={true} />
             </div>
           ))}
         </div>

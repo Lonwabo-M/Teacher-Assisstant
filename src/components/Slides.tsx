@@ -37,7 +37,7 @@ const PrintableSlidePage: React.FC<{
             <p>Grade: {inputs.grade} ({inputs.standard})</p>
           </div>
         ) : (
-          <ul className="text-3xl list-disc space-y-4 text-left max-w-4xl">
+          <ul className="text-3xl list-disc list-outside pl-8 space-y-4 text-left max-w-4xl">
             {slide.content.map((point, i) => <LatexRenderer as="li" key={i} content={point} />)}
           </ul>
         )}
@@ -157,7 +157,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
               <div className="flex-grow space-y-3 mt-4">
                 <LatexRenderer as="p" content={`<strong>Key Concept:</strong> ${slide.keyConcept}`} className="text-md text-slate-500 italic" />
                 
-                <ul className="list-disc list-inside text-slate-700 space-y-2 pt-2">
+                <ul className="list-disc list-outside pl-5 text-slate-700 space-y-2 pt-2">
                   {index === 0 ? (
                     <>
                       <li>Subject: {inputs.subject}</li>

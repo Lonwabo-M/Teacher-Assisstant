@@ -5,6 +5,7 @@ import type { Worksheet, WorksheetQuestion, ChartData, WorksheetSection } from '
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
 import LatexRenderer from './LatexRenderer';
+import CalculationRenderer from './CalculationRenderer';
 
 interface WorksheetProps {
   worksheet: Worksheet;
@@ -20,14 +21,14 @@ const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ qu
         className="font-semibold text-slate-700 mb-2"
       />
       {question.type === 'multiple-choice' && question.options && (
-        <ul className="space-y-1 pl-6">
+        <ol className="space-y-1 pl-6">
           {question.options.map((option, i) => (
-            <li key={i} className="flex items-center">
+            <li key={i} className="flex items-start">
               <span className="mr-2 text-slate-500">{String.fromCharCode(97 + i)}.</span>
               <LatexRenderer as="span" content={option} className="text-slate-600" />
             </li>
           ))}
-        </ul>
+        </ol>
       )}
        {question.type === 'matching' && question.options && (
         <div className="pl-6 mt-2">
@@ -67,28 +68,33 @@ const PrintableWorksheet: React.FC<{
         style={{ width: '800px', fontSize: '12pt', lineHeight: 1.6 }}
     >
       <div id="printable-worksheet-part-1">
-        <h1 className="text-center mb-4 font-bold" style={{ fontSize: '24pt' }}>{worksheet.title}</h1>
-        <div className="flex justify-between mb-8 pb-4 border-b-2 border-black">
+        <h1 className="text-center mb-8 font-bold" style={{ fontSize: '24pt' }}>{worksheet.title}</h1>
+        <div className="flex justify-between mb-8 pb-4 border-b-2 border-slate-200">
             <span className="font-bold">Name: ___________________________</span>
             <span className="font-bold">Date: _________________</span>
         </div>
         
-        <div className="bg-slate-100 border-l-4 border-slate-400 p-4 rounded-r-lg mb-8">
-            <h3 className="font-bold text-lg">Instructions</h3>
-            <LatexRenderer as="p" content={worksheet.instructions} />
+        <div className="mb-8">
+            <h3 className="font-semibold text-lg mb-2 text-slate-800">Instructions</h3>
+            <LatexRenderer as="p" content={worksheet.instructions} className="text-slate-800" />
         </div>
 
-        {generalSections.map((section) => (
-            <section key={section.title} className="mb-8">
-                <h3 className="text-xl font-bold text-slate-800 mb-4 pb-2 border-b border-slate-300" style={{ fontSize: '16pt' }}>{section.title}</h3>
-                {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
-                <div className="divide-y divide-slate-200">
-                    {section.questions.map((q) => (
-                        <Question key={questionCounter} question={q} index={questionCounter++} />
-                    ))}
-                </div>
-            </section>
-        ))}
+        <div className="space-y-8">
+            {generalSections.map((section) => (
+                <section key={section.title} className="border-b-2 border-slate-200 pb-4 last:border-b-0">
+                    <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>{section.title}</h3>
+                    {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
+                    <div className="divide-y divide-slate-200">
+                        {section.questions.map((q, qIndex) => {
+                            const currentQuestionIndex = questionCounter++;
+                            return (<div key={`${section.title}-${qIndex}`} style={{ breakInside: 'avoid' }}>
+                                <Question question={q} index={currentQuestionIndex} />
+                            </div>);
+                        })}
+                    </div>
+                </section>
+            ))}
+        </div>
       </div>
 
       {(sourceSections.length > 0 || worksheet.source || chartData) && (
@@ -111,17 +117,22 @@ const PrintableWorksheet: React.FC<{
                 </div>
               )}
             </div>
-              {sourceSections.map((section) => (
-                  <section key={section.title} className="mb-8">
-                      <h3 className="text-xl font-bold text-slate-800 mb-4 pb-2 border-b border-slate-300" style={{ fontSize: '16pt' }}>{section.title}</h3>
-                      {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
-                      <div className="divide-y divide-slate-200">
-                          {section.questions.map((q) => (
-                              <Question key={questionCounter} question={q} index={questionCounter++} />
-                          ))}
-                      </div>
-                  </section>
-              ))}
+              <div className="space-y-8">
+                {sourceSections.map((section) => (
+                    <section key={section.title} className="border-b-2 border-slate-200 pb-4 last:border-b-0">
+                        <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>{section.title}</h3>
+                        {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
+                        <div className="divide-y divide-slate-200">
+                            {section.questions.map((q, qIndex) => {
+                                const currentQuestionIndex = questionCounter++;
+                                return (<div key={`${section.title}-${qIndex}`} style={{ breakInside: 'avoid' }}>
+                                    <Question question={q} index={currentQuestionIndex} />
+                                </div>);
+                            })}
+                        </div>
+                    </section>
+                ))}
+              </div>
           </div>
       )}
     </div>
@@ -135,30 +146,42 @@ const PrintableMemo: React.FC<{
   return (
     <div 
       className="p-10 bg-white font-serif text-black" 
-      style={{ width: '800px', fontSize: '12pt', lineHeight: 1.6 }}
+      style={{ width: '800px', fontSize: '12pt' }}
     >
       <div id="printable-memo-part-1">
-        <h1 className="text-center mb-8 font-bold" style={{ fontSize: '24pt' }}>
+        <h1 className="text-center mb-10 font-bold" style={{ fontSize: '24pt' }}>
           {worksheet.title} - Answer Memo
         </h1>
         
-        {worksheet.sections.map((section) => (
-          <section key={`memo-${section.title}`} className="mb-8">
-            <h2 className="border-b-2 border-black pb-2 mb-6 font-bold" style={{ fontSize: '18pt' }}>
-              {section.title}
-            </h2>
-            {section.questions.map((q) => (
-              <div key={`memo-q-${questionCounter}`} className="mb-6">
-                <LatexRenderer as="p" content={`${++questionCounter}. ${q.question}`} className="font-bold" style={{ fontSize: '14pt' }} />
-                {q.answer && (
-                  <div className="mt-2 p-3 bg-slate-100 border-l-4 border-slate-400 rounded-r-md">
-                    <LatexRenderer content={q.answer} className="whitespace-pre-wrap" />
+        <div className="space-y-8">
+          {worksheet.sections.map((section, sectionIndex) => (
+            <section key={`memo-${section.title}`} className="border-b-2 border-slate-200 pb-4 last:border-b-0">
+              <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>
+                {section.title}
+              </h3>
+              <div className="divide-y divide-slate-200">
+                {section.questions.map((q, qIndex) => (
+                  <div key={`memo-q-${sectionIndex}-${qIndex}`} className="py-3" style={{ breakInside: 'avoid' }}>
+                    <LatexRenderer as="div" content={`${++questionCounter}. ${q.question}`} className="font-semibold text-slate-700 mb-1" />
+                    {q.answer && (
+                      q.answer.includes('\\[') ? (
+                        <CalculationRenderer 
+                          content={q.answer}
+                          className="text-slate-800 mt-2"
+                          style={{ lineHeight: 1.6 }}
+                        />
+                      ) : (
+                        <div className="pl-6 text-slate-800 whitespace-pre-wrap" style={{ lineHeight: 1.6 }}>
+                          <LatexRenderer content={q.answer} />
+                        </div>
+                      )
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
-          </section>
-        ))}
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );

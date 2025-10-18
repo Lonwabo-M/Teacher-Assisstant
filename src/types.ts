@@ -28,10 +28,17 @@ export interface WorksheetQuestion {
   answer?: string;
 }
 
+export interface WorksheetSection {
+  title: string;
+  content?: string; // For instructions, word banks, scenario text etc.
+  questions: WorksheetQuestion[];
+}
+
+
 export interface Worksheet {
   title: string;
   instructions: string;
-  questions: WorksheetQuestion[];
+  sections: WorksheetSection[];
   source?: {
     title: string;
     content: string;

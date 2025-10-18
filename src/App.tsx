@@ -62,6 +62,13 @@ const App: React.FC = () => {
     setCurrentInputs(defaultInputs); // Reset the form to its default state
   }
 
+  const handleCreateNew = () => {
+    setLessonData(null);
+    setError(null);
+    setCurrentInputs(defaultInputs);
+    setIsSidebarOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
@@ -77,28 +84,35 @@ const App: React.FC = () => {
           history={lessonHistory}
           onSelectLesson={handleSelectLesson}
           onClearHistory={handleClearHistory}
+          onCreateNew={handleCreateNew}
           activeLessonId={lessonData?.id}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          showCreateNewButton={!!lessonData}
         />
         <main className="flex-grow p-4 md:p-8">
           <div className="max-w-4xl mx-auto">
-            {!lessonData && !isLoading && !error && (
-               <p className="text-center text-slate-600 mb-8">
-                Simply provide your curriculum goals, select a standard, and let our AI craft a complete, high-quality lesson package for you in moments.
-              </p>
+            {!lessonData ? (
+              <>
+                {!isLoading && !error && (
+                  <p className="text-center text-slate-600 mb-8">
+                    Simply provide your curriculum goals, select a standard, and let our AI craft a complete, high-quality lesson package for you in moments.
+                  </p>
+                )}
+                <InputForm 
+                  inputs={currentInputs}
+                  onInputChange={setCurrentInputs}
+                  onGenerate={handleGenerateLesson} 
+                  isLoading={isLoading} 
+                />
+                <div className="mt-12">
+                  {isLoading && <Loader />}
+                  {error && <ErrorMessage message={error} />}
+                </div>
+              </>
+            ) : (
+              <LessonOutput data={lessonData} />
             )}
-            <InputForm 
-              inputs={currentInputs}
-              onInputChange={setCurrentInputs}
-              onGenerate={handleGenerateLesson} 
-              isLoading={isLoading} 
-            />
-            <div className="mt-12">
-              {isLoading && <Loader />}
-              {error && <ErrorMessage message={error} />}
-              {lessonData && <LessonOutput data={lessonData} />}
-            </div>
           </div>
         </main>
       </div>

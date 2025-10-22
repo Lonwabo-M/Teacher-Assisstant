@@ -39,9 +39,9 @@ const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ qu
       )}
       {(question.type === 'short-answer' || question.type === 'fill-in-the-blank' || question.type === 'source-based' || question.type === 'essay') && (
          <div className="mt-4 space-y-4">
-            <div className="border-b-2 border-dotted border-slate-400 h-1"></div>
-            <div className="border-b-2 border-dotted border-slate-400 h-1"></div>
-            <div className="border-b-2 border-dotted border-slate-400 h-1"></div>
+            <div className="text-slate-400 tracking-wider">_______________________________________________________________________________</div>
+            <div className="text-slate-400 tracking-wider">_______________________________________________________________________________</div>
+            <div className="text-slate-400 tracking-wider">_______________________________________________________________________________</div>
          </div>
       )}
     </div>
@@ -54,11 +54,11 @@ const PrintableWorksheet: React.FC<{
 }> = ({ worksheet, chartData }) => {
   
   const sectionsWithSourceQuestions = new Set(
-    worksheet.sections.filter(sec => sec.questions.some(q => q.type === 'source-based')).map(sec => sec.title)
+    (worksheet.sections || []).filter(sec => sec.questions.some(q => q.type === 'source-based')).map(sec => sec.title)
   );
 
-  const generalSections = worksheet.sections.filter(sec => !sectionsWithSourceQuestions.has(sec.title));
-  const sourceSections = worksheet.sections.filter(sec => sectionsWithSourceQuestions.has(sec.title));
+  const generalSections = (worksheet.sections || []).filter(sec => !sectionsWithSourceQuestions.has(sec.title));
+  const sourceSections = (worksheet.sections || []).filter(sec => sectionsWithSourceQuestions.has(sec.title));
   
   let questionCounter = 0;
 
@@ -85,7 +85,7 @@ const PrintableWorksheet: React.FC<{
                     <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>{section.title}</h3>
                     {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
                     <div className="divide-y divide-slate-200">
-                        {section.questions.map((q, qIndex) => {
+                        {(section.questions || []).map((q, qIndex) => {
                             const currentQuestionIndex = questionCounter++;
                             return (<div key={`${section.title}-${qIndex}`} style={{ breakInside: 'avoid' }}>
                                 <Question question={q} index={currentQuestionIndex} />
@@ -123,7 +123,7 @@ const PrintableWorksheet: React.FC<{
                         <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>{section.title}</h3>
                         {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
                         <div className="divide-y divide-slate-200">
-                            {section.questions.map((q, qIndex) => {
+                            {(section.questions || []).map((q, qIndex) => {
                                 const currentQuestionIndex = questionCounter++;
                                 return (<div key={`${section.title}-${qIndex}`} style={{ breakInside: 'avoid' }}>
                                     <Question question={q} index={currentQuestionIndex} />
@@ -154,28 +154,22 @@ const PrintableMemo: React.FC<{
         </h1>
         
         <div className="space-y-8">
-          {worksheet.sections.map((section, sectionIndex) => (
+          {(worksheet.sections || []).map((section, sectionIndex) => (
             <section key={`memo-${section.title}`} className="border-b-2 border-slate-200 pb-4 last:border-b-0">
               <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>
                 {section.title}
               </h3>
               <div className="divide-y divide-slate-200">
-                {section.questions.map((q, qIndex) => (
-                  <div key={`memo-q-${sectionIndex}-${qIndex}`} className="py-3" style={{ breakInside: 'avoid' }}>
-                    <LatexRenderer as="div" content={`${++questionCounter}. ${q.question}`} className="font-semibold text-slate-700 mb-1" />
-                    {q.answer && (
-                      q.answer.includes('\\[') ? (
-                        <CalculationRenderer 
-                          content={q.answer}
-                          className="text-slate-800 mt-2"
-                          style={{ lineHeight: 1.6 }}
-                        />
+                {(section.questions || []).map((q, qIndex) => (
+                  <div key={`memo-q-${sectionIndex}-${qIndex}`} className="py-3 flex items-start" style={{ breakInside: 'avoid' }}>
+                    <div className="font-semibold text-slate-700 mr-2">{++questionCounter}.</div>
+                    <div className="flex-1">
+                      {q.type === 'matching' ? (
+                          <LatexRenderer as="span" content={q.answer || ''} className="text-slate-800" />
                       ) : (
-                        <div className="pl-6 text-slate-800 whitespace-pre-wrap" style={{ lineHeight: 1.6 }}>
-                          <LatexRenderer content={q.answer} />
-                        </div>
-                      )
-                    )}
+                        <CalculationRenderer content={q.answer || ''} className="text-slate-800" />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -189,7 +183,7 @@ const PrintableMemo: React.FC<{
 
 
 const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
-  const [isDownloading, setIsDownloading] = useState<'worksheet' | 'memo' | null>(null);
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
   const handleDownload = async (type: 'worksheet' | 'memo') => {
     setIsDownloading(type);
@@ -224,19 +218,27 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
         const addCanvasToPdf = async (element: HTMLElement, pdfInstance: jsPDF) => {
             const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
             const imgData = canvas.toDataURL('image/jpeg', 0.9);
+
+            const margin = 40;
             const pdfWidth = pdfInstance.internal.pageSize.getWidth();
             const pdfHeight = pdfInstance.internal.pageSize.getHeight();
+            const contentWidth = pdfWidth - margin * 2;
+            const pageContentHeight = pdfHeight - margin * 2;
+            
             const imgProps = pdfInstance.getImageProperties(imgData);
-            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            let heightLeft = imgHeight;
+            const totalImageHeight = (imgProps.height * contentWidth) / imgProps.width;
+
+            let heightLeft = totalImageHeight;
             let position = 0;
-            pdfInstance.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
+
+            pdfInstance.addImage(imgData, 'JPEG', margin, margin, contentWidth, totalImageHeight);
+            heightLeft -= pageContentHeight;
+
             while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
+                position -= pageContentHeight;
                 pdfInstance.addPage();
-                pdfInstance.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-                heightLeft -= pdfHeight;
+                pdfInstance.addImage(imgData, 'JPEG', margin, position + margin, contentWidth, totalImageHeight);
+                heightLeft -= pageContentHeight;
             }
         };
 
@@ -338,12 +340,12 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
           </div>
           
           <div className="space-y-8">
-              {worksheet.sections.map((section, sectionIndex) => (
+              {(worksheet.sections || []).map((section, sectionIndex) => (
                 <section key={sectionIndex}>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">{section.title}</h3>
                   {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
                   <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg p-4">
-                    {section.questions.map((q) => {
+                    {(section.questions || []).map((q) => {
                        questionCounter++;
                        return <Question key={questionCounter} question={q} index={questionCounter-1} />
                     })}

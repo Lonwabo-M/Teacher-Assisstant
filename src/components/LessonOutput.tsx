@@ -32,7 +32,8 @@ const LessonOutput: React.FC<LessonOutputProps> = ({ data }) => {
   const renderContent = () => {
     switch (activeTab) {
       case 'plan':
-        return <LessonPlan plan={data.lessonPlan} />;
+        const lessonTitle = data.slides?.[0]?.title || 'Untitled Lesson';
+        return <LessonPlan plan={data.lessonPlan} title={lessonTitle} />;
       case 'slides':
         return <Slides slides={data.slides} inputs={data.inputs} chartData={data.chartData} />;
       case 'worksheet':

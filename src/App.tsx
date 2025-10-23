@@ -13,7 +13,7 @@ const defaultInputs: UserInputs = {
   standard: 'CAPS',
   grade: 'Grade 10',
   subject: 'English Home Language',
-  sourceBased: false,
+  generateDiagram: false,
   includeChart: false,
 };
 

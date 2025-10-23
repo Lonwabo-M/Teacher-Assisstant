@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { UserInputs, LessonData } from '../types';
+import type { UserInputs, LessonData, Worksheet } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -79,9 +79,13 @@ const responseSchema = {
             type: Type.OBJECT,
             description: "An optional source material for source-based questions.",
             properties: {
-                title: { type: Type.STRING, description: "The title of the source material (e.g., 'Excerpt from the Freedom Charter')." },
-                content: { type: Type.STRING, description: "The full text or detailed description of the source material." },
+                title: { type: Type.STRING, description: "The title of the source material (e.g., 'Excerpt from the Freedom Charter' or 'Source A: Diagram')." },
+                content: { type: Type.STRING, description: "The full text or detailed description/caption of the source material." },
             },
+        },
+        diagramDescription: { 
+            type: Type.STRING, 
+            description: "A detailed, descriptive prompt for an AI image generation model to create a scientific diagram relevant to the worksheet questions. For example: 'A simple line diagram showing a block on a frictionless inclined plane. The plane is at an angle theta to the horizontal. Show and label the forces acting on the block: weight (mg) acting vertically downwards, and the normal force (N) acting perpendicular to and away from the plane.' Omit this field if no diagram is relevant or requested." 
         },
       },
       required: ["title", "instructions", "sections"],
@@ -127,46 +131,58 @@ const responseSchema = {
  */
 function cleanLatexInObject<T>(data: T): T {
   if (typeof data === 'string') {
-    // FIX: Explicitly type `cleanedString` as `string`.
-    // When `data` has a generic type `T` that is also a string, TypeScript infers
-    // `cleanedString` as `T & string`. The `String.prototype.replace()` method returns a
-    // new `string`, which cannot be assigned to the potentially more specific type `T & string`.
-    // Declaring `cleanedString` as `string` resolves this type conflict.
+    // FIX: Explicitly type `cleanedString` as `string` to prevent TypeScript errors
+    // when reassigning the result of `replace` to a variable of a generic type `T`.
     let cleanedString: string = data;
-    
-    // FIX: Correct over-escaped LaTeX commands from the model.
-    // The model sometimes returns `\\frac` or `\\times` instead of the correct `\frac` or `\times`.
-    // This breaks the KaTeX renderer. This regex finds any occurrence of a double backslash 
-    // followed by letters (a command) and replaces it with a single backslash and the command.
+
+    // 1. Remove non-printable control characters that can break parsing.
+    // The form feed character (`\f`) is a known issue.
+    cleanedString = cleanedString.replace(/[\f\v]/g, '');
+
+    // 2. Correct over-escaped LaTeX commands (e.g., `\\frac` -> `\frac`).
     cleanedString = cleanedString.replace(/\\\\([a-zA-Z]+)/g, '\\$1');
 
-    // FIX: Escaped backslashes in replacement strings to prevent them from being interpreted as escape sequences (e.g., `\t` as a tab).
-    // This resolves a series of misleading TypeScript errors.
-    // Fix common model errors like `\ext{...}` or `(ext...)` instead of `\text{...}`
+    // 3. Fix common command typos or variations from the model.
     cleanedString = cleanedString.replace(/\\ext\{([^}]+)\}/g, '\\text{$1}');
     cleanedString = cleanedString.replace(/\(ext([^)]+)\)/g, '\\(\\text{$1}\\)');
-    
-    // Fix `imes` to `\times`
     cleanedString = cleanedString.replace(/\bimes\b/g, '\\times');
+    cleanedString = cleanedString.replace(/\\fract\b/g, '\\frac');
+    cleanedString = cleanedString.replace(/\\sqr\b/g, '\\sqrt');
     
-    // Fix malformed commands like `\[lambda]` to `\lambda`.
-    // The original regex `\\\[([a-zA-Z]+)\]` was too broad and could corrupt valid expressions
-    // by converting, for example, a variable `F` in `\[F]` into an invalid command `\F`.
-    // This version is safer, targeting only lowercase commands and adding a trailing space
-    // for better rendering of commands like `\frac `.
+    // 4. Fix malformed commands like `\[lambda]` to `\lambda`.
     cleanedString = cleanedString.replace(/\\\[([a-z]+)\]/g, '\\$1 ');
 
-    // FIX: Replace 'x' with '\times' for multiplication between numbers to improve KaTeX rendering.
-    // This regex looks for a number, followed by optional space, the letter 'x', optional space, and another number.
-    // This prevents KaTeX parsing errors when the model incorrectly uses 'x' for multiplication.
-    // Example: "5.98 x 10^24" becomes "5.98 \times 10^24".
+    // 5. Standardize multiplication symbols.
+    // Replace 'x' between numbers with `\times`.
     cleanedString = cleanedString.replace(/(\d)\s*x\s*(\d)/g, '$1 \\times $2');
+    // Replace standalone dot between numbers with `\cdot`.
+    cleanedString = cleanedString.replace(/(\d)\s+\.\s+(\d)/g, '$1 \\cdot $2');
 
-    // Remove erroneous tab characters `\t` which can break parsing.
+    // 6. Replace common Unicode math symbols with their LaTeX equivalents.
+    const unicodeToLatex: { [key: string]: string } = {
+        '→': '\\rightarrow', '←': '\\leftarrow', '↔': '\\leftrightarrow',
+        '⇒': '\\Rightarrow', '⇐': '\\Leftarrow', '⇔': '\\Leftrightarrow',
+        '°': '^\\circ', 'Δ': '\\Delta', 'λ': '\\lambda', 'θ': '\\theta',
+        'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'π': '\\pi', 'Σ': '\\Sigma',
+        'Ω': '\\Omega', 'ω': '\\omega', 'μ': '\\mu', '≠': '\\neq', '≥': '\\geq', '≤': '\\leq',
+        '±': '\\pm', '⋅': '\\cdot'
+    };
+    // Create a single regex for efficiency.
+    const unicodeRegex = new RegExp(Object.keys(unicodeToLatex).join('|'), 'g');
+    cleanedString = cleanedString.replace(unicodeRegex, (match) => unicodeToLatex[match]);
+
+    // 7. Attempt to fix mismatched delimiters. Assume block mode is intended.
+    // \ ( ... \] -> \[ ... \]
+    cleanedString = cleanedString.replace(/\\\(\s*([^)]*?)\s*\\\]/g, '\\[ $1 \\]');
+    // \[ ... \) -> \[ ... \]
+    cleanedString = cleanedString.replace(/\\\[\s*([^\]]*?)\s*\\\)/g, '\\[ $1 \\]');
+
+    // 8. Remove erroneous tab characters `\t` which can break parsing.
     cleanedString = cleanedString.replace(/\t/g, ' ');
 
     return cleanedString as unknown as T;
   }
+
 
   if (Array.isArray(data)) {
     return data.map(item => cleanLatexInObject(item)) as unknown as T;
@@ -188,7 +204,7 @@ function cleanLatexInObject<T>(data: T): T {
 // FIX: Changed return type to Omit<LessonData, 'id' | 'inputs'> to accurately reflect what the API returns.
 // The `id` and `inputs` are added in the App component after this function resolves.
 export async function generateLesson(inputs: UserInputs): Promise<Omit<LessonData, 'id' | 'inputs'>> {
-  const { goals, standard, grade, subject, sourceBased, includeChart } = inputs;
+  const { goals, standard, grade, subject, generateDiagram, includeChart } = inputs;
 
   const prompt = `
     You are an expert instructional designer and textbook author, tasked with creating a comprehensive, high-quality, and engaging lesson package that is of publishable, textbook-level quality. The materials must be deeply informative, well-structured, and pedagogically sound. Your first duty is as a strict curriculum compliance officer.
@@ -198,7 +214,7 @@ export async function generateLesson(inputs: UserInputs): Promise<Omit<LessonDat
     - **Grade Level:** ${grade}
     - **Educational Standard:** ${standard}
     - **Core Curriculum Goals/Objectives:** ${goals}
-    - **Source-Based Questions Requested:** ${sourceBased ? 'Yes' : 'No'}
+    - **Generate Diagram Requested:** ${generateDiagram ? 'Yes' : 'No'}
     - **Chart Generation Requested:** ${includeChart ? 'Yes' : 'No'}
 
     **CRITICAL VALIDATION STEP:**
@@ -215,6 +231,20 @@ export async function generateLesson(inputs: UserInputs): Promise<Omit<LessonDat
 
     **Content Generation Task (only if there is no mismatch):**
     Generate a comprehensive lesson package with the following high-quality components:
+    
+    **SPECIAL INSTRUCTION FOR DIAGRAM GENERATION:**
+    - If 'Generate Diagram Requested' is 'Yes' AND the topic is visually-driven (e.g., Physics, Life Sciences, Geography, Geometry), you MUST perform the following three actions:
+    1.  **Create a Diagram Prompt:** In the 'worksheet' object, you MUST populate the 'diagramDescription' field with a detailed, clear, and concise prompt for an AI image generation model. This prompt should describe a scientifically accurate and pedagogically useful diagram.
+        *   **Good Physics Example:** 'A simple, clear line diagram of a 20 kg block on a rough horizontal surface. A force of 35 N is applied to the block at an angle of 40 degrees above the horizontal. A light inextensible string connects it to a frictionless pulley, with two smaller blocks P and Q hanging vertically from the string. Label all forces and values clearly.'
+        *   **Good Biology Example:** 'A simplified, labeled diagram of an animal cell. Include and label the following organelles: nucleus, cytoplasm, cell membrane, mitochondria, and ribosomes. Use clear lines and legible text.'
+    2.  **Create High-Quality Source-Based Questions:** You MUST create a dedicated section in the worksheet with 'source-based' questions that specifically and directly require students to analyze the diagram you have described. When generating these questions, especially for Physical Sciences, Mathematics, or Life Sciences, you MUST emulate the style of high-quality, textbook-level examination questions (like those found in CAPS or Cambridge standards). This involves:
+        *   **Multi-Part Structure:** Break down the main problem into several sub-questions (e.g., 4.1, 4.2, 4.2.1).
+        *   **Cognitive Scaffolding:** Start with a foundational, lower-order question, such as defining a key term or stating a relevant law (e.g., "Define 'free fall'.", "State the principle of conservation of momentum."). This aligns with Bloom's 'Remembering' or 'Understanding'.
+        *   **Application and Analysis:** Follow up with higher-order questions that require applying formulas, interpreting the diagram, and performing calculations based on the provided scenario (e.g., "Calculate the velocity of ball Q after the collision.", "Determine the magnitude of the impulse on ball P."). This aligns with Bloom's 'Applying' and 'Analyzing'.
+        *   **Provide Full Context:** The question's introductory text, combined with the diagram, must provide all necessary values and context for a student to solve the problems.
+    3.  **Create a Source Reference:** In the worksheet's 'source' property, you MUST set the title to 'Source A: Diagram' and provide a brief caption for the diagram in the 'content' field.
+    - If a diagram is not relevant for the topic (e.g., History essay, English poetry), you MUST omit the 'diagramDescription' and related source material.
+
     1.  **Lesson Plan:** A step-by-step plan for the teacher. Each section's 'content' must be detailed, outlining specific 'Teacher Activities' (e.g., 'Explain...', 'Demonstrate...'), 'Learner Activities' (e.g., 'In pairs, students will discuss...'), and 'Resources Needed'.
     2.  **Presentation Slides:** Content for a slide deck. For each slide, you MUST provide detailed **'speakerNotes'**. These notes are crucial and should offer the teacher in-depth explanations, additional examples, discussion prompts, and potential student misconceptions to address. They should transform a simple slide into a rich teaching moment.
     3.  **Student Worksheet:** A high-quality, well-structured worksheet organized into logical sections. You MUST follow the structure below.
@@ -262,7 +292,7 @@ export async function generateLesson(inputs: UserInputs): Promise<Omit<LessonDat
 
     **1. Delimiters:**
     *   For **inline** math (e.g., a variable like \\(g\\) in a sentence), you MUST use \`\\(\`...\`\\)\`.
-    *   For **block** (centered, on its own line) equations, you MUST use \`\\[\`...\`\\]\`.
+    *   For **block** (centered, on its own line) equations, you MUST use \`\\[\`...\`\\)\`.
 
     **2. Absolute Rule:**
     *   Every single mathematical element—including single variables in text (\\(F_g\\)), numbers (\\(9.8\\)), constants (\\(G\\)), and units (\\(\\text{m/s}^2\\))—MUST be wrapped in the appropriate LaTeX delimiters.
@@ -276,11 +306,10 @@ export async function generateLesson(inputs: UserInputs): Promise<Omit<LessonDat
     **4. MANDATORY COMPLIANCE:** Any deviation from these LaTeX rules will result in a substandard, unprofessional output. All mathematical and scientific notation must be rendered using these specific commands and delimiters without exception.
   `;
 
-  // FIX: Added the Gemini API call and response handling to complete the function.
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-pro", // Using a more advanced model for this complex, structured task.
-      contents: prompt,
+      contents: { parts: [{ text: prompt }] },
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
@@ -300,7 +329,41 @@ export async function generateLesson(inputs: UserInputs): Promise<Omit<LessonDat
     const { mismatch, mismatchReason, ...lessonContent } = parsedData;
 
     // A final cleaning step to catch any LaTeX syntax errors from the model.
-    const cleanedLessonContent = cleanLatexInObject(lessonContent);
+    let cleanedLessonContent = cleanLatexInObject(lessonContent);
+
+    // Step 2: Generate diagram if requested and a prompt was provided
+    const diagramPrompt = cleanedLessonContent.worksheet?.diagramDescription;
+    if (diagramPrompt) {
+      console.log("Generating diagram with prompt:", diagramPrompt);
+      try {
+        const imageResponse = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: diagramPrompt,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: 'image/png',
+              aspectRatio: '4:3', // Good aspect ratio for diagrams
+            },
+        });
+        
+        if (imageResponse.generatedImages && imageResponse.generatedImages.length > 0) {
+            const generatedImage = {
+                data: imageResponse.generatedImages[0].image.imageBytes,
+                mimeType: 'image/png',
+            };
+            // Add the generated image to the worksheet object
+            cleanedLessonContent.worksheet.generatedImage = generatedImage;
+        }
+      } catch (imageError) {
+        console.error("Error generating diagram:", imageError);
+        // Don't fail the whole lesson if image generation fails, just log it.
+      }
+    }
+
+    // Remove the temporary description from the final data
+    if (cleanedLessonContent.worksheet) {
+      delete (cleanedLessonContent.worksheet as Partial<Worksheet & { diagramDescription?: string }>).diagramDescription;
+    }
 
     return cleanedLessonContent as Omit<LessonData, 'id' | 'inputs'>;
 

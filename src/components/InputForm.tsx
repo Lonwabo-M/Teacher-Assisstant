@@ -49,7 +49,7 @@ const InputForm: React.FC<InputFormProps> = ({ inputs, onInputChange, onGenerate
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     // Reset file input to allow re-uploading the same file
     if (fileInputRef.current) {
@@ -111,21 +111,23 @@ const InputForm: React.FC<InputFormProps> = ({ inputs, onInputChange, onGenerate
             name="goals"
             value={inputs.goals}
             onChange={handleChange}
-            placeholder="e.g., 'Understand the causes and consequences of the Industrial Revolution.'"
+            placeholder="e.g., 'Understand Newton's Second Law of Motion (F=ma) and apply it to problems involving forces, mass, and acceleration.'"
             className="w-full h-32 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition duration-200"
             required
           />
-           <div className="mt-2">
-            <div className="flex items-center gap-4">
-              <label htmlFor="file-upload" className="cursor-pointer inline-flex items-center px-4 py-2 bg-white text-slate-700 font-semibold text-sm rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                Upload a Doc
-              </label>
-              <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept=".txt,.pdf" ref={fileInputRef} />
+           <div className="mt-4">
+            <p className="text-sm font-semibold text-slate-600 mb-2">Or, upload goals from a file:</p>
+            <div className="flex flex-wrap items-start gap-4">
+              <div>
+                <label htmlFor="file-upload" className="cursor-pointer inline-flex items-center px-4 py-2 bg-white text-slate-700 font-semibold text-sm rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Upload Text/PDF
+                </label>
+                <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleDocFileChange} accept=".txt,.pdf" ref={fileInputRef} />
+              </div>
             </div>
-            <p className="text-sm text-slate-500 mt-2">You can type, paste or upload a .txt or .pdf file.</p>
           </div>
         </div>
 
@@ -171,18 +173,18 @@ const InputForm: React.FC<InputFormProps> = ({ inputs, onInputChange, onGenerate
           </div>
         </div>
         
-        <div className="space-y-4">
-          <label htmlFor="sourceBased" className="flex items-center space-x-3 cursor-pointer">
+        <div className="space-y-4 pt-2">
+          <label htmlFor="generateDiagram" className="flex items-center space-x-3 cursor-pointer">
             <input
               type="checkbox"
-              id="sourceBased"
-              name="sourceBased"
-              checked={!!inputs.sourceBased}
+              id="generateDiagram"
+              name="generateDiagram"
+              checked={!!inputs.generateDiagram}
               onChange={handleChange}
               className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
             />
             <span className="text-sm font-medium text-slate-700">
-              Include Source-Based Questions <span className="text-slate-500 font-normal">(e.g., for History)</span>
+              Generate Diagram for Source-Based Questions <span className="text-slate-500 font-normal">(e.g., for Physics, Biology)</span>
             </span>
           </label>
           <label htmlFor="includeChart" className="flex items-center space-x-3 cursor-pointer">

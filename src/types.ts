@@ -3,7 +3,7 @@ export interface UserInputs {
   standard: 'CAPS' | 'Cambridge';
   grade: string;
   subject: string;
-  sourceBased?: boolean;
+  generateDiagram?: boolean;
   includeChart?: boolean;
 }
 
@@ -42,6 +42,10 @@ export interface Worksheet {
   source?: {
     title: string;
     content: string;
+  };
+  generatedImage?: {
+    data: string; // base64 encoded string
+    mimeType: string;
   };
 }
 

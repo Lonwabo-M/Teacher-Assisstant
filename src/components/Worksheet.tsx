@@ -61,6 +61,17 @@ const PrintableWorksheet: React.FC<{
   const sourceSections = (worksheet.sections || []).filter(sec => sectionsWithSourceQuestions.has(sec.title));
   
   let questionCounter = 0;
+  
+  const sources = [];
+  if (worksheet.generatedImage) {
+      sources.push({ type: 'image', data: worksheet.generatedImage });
+  }
+  if (chartData) {
+      sources.push({ type: 'chart', data: chartData });
+  }
+  if (worksheet.source) {
+      sources.push({ type: 'text', data: worksheet.source });
+  }
 
   return (
     <div 
@@ -97,25 +108,44 @@ const PrintableWorksheet: React.FC<{
         </div>
       </div>
 
-      {(sourceSections.length > 0 || worksheet.source || chartData) && (
+      {(sources.length > 0) && (
           <div id="printable-worksheet-part-2">
             <div className="my-8 border-2 border-slate-300 bg-slate-50 rounded-lg p-6">
               <h3 className="text-xl font-bold text-slate-700 mb-4" style={{ fontSize: '18pt' }}>Source Material</h3>
-              {chartData && (
-                 <div className="mb-4">
-                  <h4 className="font-semibold text-slate-700 mb-4 text-lg">Source A: Chart</h4>
-                  <div className="h-96">
-                    <Chart chartData={chartData} showControls={false} />
-                  </div>
-                 </div>
-              )}
-              {worksheet.source && (
-                <div>
-                  <h4 className="font-semibold text-slate-700 mb-2 text-lg">Source B: Text</h4>
-                  <LatexRenderer as="h5" content={worksheet.source.title} className="font-semibold text-sky-800 mb-4 italic" />
-                  <LatexRenderer content={worksheet.source.content} className="text-slate-700 whitespace-pre-wrap" />
-                </div>
-              )}
+              {sources.map((source, index) => {
+                const label = `Source ${String.fromCharCode(65 + index)}`; // A, B, C...
+                if (source.type === 'image') {
+                  return (
+                    <div key={index} className="mb-6">
+                      <h4 className="font-semibold text-slate-700 mb-4 text-lg">{label}: Diagram</h4>
+                      <img
+                        src={`data:${source.data.mimeType};base64,${source.data.data}`}
+                        alt="Source material"
+                        className="max-w-full h-auto mx-auto rounded-md border border-slate-200"
+                      />
+                    </div>
+                  );
+                }
+                if (source.type === 'chart') {
+                  return (
+                    <div key={index} className="mb-6">
+                      <h4 className="font-semibold text-slate-700 mb-4 text-lg">{label}: Chart</h4>
+                      <div className="h-96">
+                        <Chart chartData={source.data} showControls={false} />
+                      </div>
+                    </div>
+                  );
+                }
+                if (source.type === 'text') {
+                  return (
+                    <div key={index}>
+                      <LatexRenderer as="h5" content={source.data.title} className="font-semibold text-sky-800 mb-4 italic" />
+                      <LatexRenderer content={source.data.content} className="text-slate-700 whitespace-pre-wrap" />
+                    </div>
+                  );
+                }
+                return null;
+              })}
             </div>
               <div className="space-y-8">
                 {sourceSections.map((section) => (
@@ -262,6 +292,17 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
   };
 
   let questionCounter = 0;
+  
+  const sources = [];
+  if (worksheet.generatedImage) {
+      sources.push({ type: 'image', data: worksheet.generatedImage });
+  }
+  if (chartData) {
+      sources.push({ type: 'chart', data: chartData });
+  }
+  if (worksheet.source) {
+      sources.push({ type: 'text', data: worksheet.source });
+  }
 
   return (
     <>
@@ -308,51 +349,65 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
             </button>
           </div>
         </div>
+        
+        <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 space-y-4">
+            <h3 className="text-xl font-semibold text-sky-700">Instructions</h3>
+            <LatexRenderer as="p" content={worksheet.instructions} className="text-slate-600" />
+        </div>
 
-        <div className="p-6 md:p-8 bg-white rounded-lg border border-slate-200">
-           <h1 className="text-center mb-2 text-2xl font-bold">{worksheet.title}</h1>
-            <p className="text-center mb-6 pb-4 border-b">Name: ___________________________ &nbsp;&nbsp;&nbsp;&nbsp; Date: _________________</p>
-          
-          {(worksheet.source || chartData) && (
-            <div className="mb-8 border border-slate-200 bg-slate-50 rounded-lg p-6">
-              <h3 className="text-xl font-bold text-slate-700 mb-4">Source Material</h3>
-               {chartData && (
-                 <div className="mb-4">
-                    <h4 className="font-semibold text-slate-700 mb-4">Source A: Chart</h4>
-                    <div className="h-96">
-                        <Chart chartData={chartData} showControls={false} />
+        {sources.length > 0 && (
+          <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 space-y-6">
+            <h3 className="text-xl font-semibold text-sky-700">Source Material</h3>
+            {sources.map((source, index) => {
+              const label = `Source ${String.fromCharCode(65 + index)}`;
+              if (source.type === 'image') {
+                return (
+                  <div key={index}>
+                    <h4 className="font-semibold text-slate-600 mb-2">{label}: Diagram</h4>
+                    <div className="flex justify-center p-4 bg-white rounded-md border">
+                        <img
+                            src={`data:${source.data.mimeType};base64,${source.data.data}`}
+                            alt="AI generated diagram"
+                            className="max-w-full h-auto"
+                        />
                     </div>
-                 </div>
-              )}
-              {worksheet.source && (
-                <div>
-                  <h4 className="font-semibold text-slate-700 mb-2">Source B: Text</h4>
-                  <LatexRenderer as="h5" content={worksheet.source.title} className="font-semibold text-sky-800 mb-4 italic" />
-                  <LatexRenderer content={worksheet.source.content} className="prose prose-sm max-w-none text-slate-600 whitespace-pre-wrap" />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="bg-sky-50 border-l-4 border-sky-500 text-sky-800 p-4 rounded-r-lg mb-8">
-            <h3 className="font-bold">Instructions</h3>
-            <LatexRenderer as="p" content={worksheet.instructions} />
-          </div>
-          
-          <div className="space-y-8">
-              {(worksheet.sections || []).map((section, sectionIndex) => (
-                <section key={sectionIndex}>
-                  <h3 className="text-xl font-bold text-slate-800 mb-2">{section.title}</h3>
-                  {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
-                  <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg p-4">
-                    {(section.questions || []).map((q) => {
-                       questionCounter++;
-                       return <Question key={questionCounter} question={q} index={questionCounter-1} />
-                    })}
                   </div>
-                </section>
-              ))}
+                );
+              }
+              if (source.type === 'chart' && source.data) {
+                return (
+                  <div key={index}>
+                    <h4 className="font-semibold text-slate-600 mb-2">{label}: Chart</h4>
+                    <div className="h-96"><Chart chartData={source.data} showControls={false} /></div>
+                  </div>
+                );
+              }
+              if (source.type === 'text' && source.data) {
+                 return (
+                  <div key={index}>
+                    <LatexRenderer as="h4" content={source.data.title} className="font-semibold text-slate-600 mb-2" />
+                    <LatexRenderer content={source.data.content} className="text-slate-500 whitespace-pre-wrap italic" />
+                  </div>
+                );
+              }
+              return null;
+            })}
           </div>
+        )}
+
+        <div className="space-y-8">
+          {(worksheet.sections || []).map((section, sectionIndex) => (
+            <div key={sectionIndex} className="bg-slate-50 p-6 rounded-lg border border-slate-200">
+              <h3 className="text-xl font-semibold text-sky-700 mb-2">{section.title}</h3>
+               {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
+              <div className="divide-y divide-slate-200">
+                {(section.questions || []).map((q, qIndex) => {
+                    const currentQuestionIndex = questionCounter++;
+                    return <Question key={qIndex} question={q} index={currentQuestionIndex} />;
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </>

@@ -118,11 +118,26 @@ const PrintableWorksheet: React.FC<{
                   return (
                     <div key={index} className="mb-6">
                       <h4 className="font-semibold text-slate-700 mb-4 text-lg">{label}: Diagram</h4>
-                      <img
-                        src={`data:${source.data.mimeType};base64,${source.data.data}`}
-                        alt="Source material"
-                        className="max-w-full h-auto mx-auto rounded-md border border-slate-200"
-                      />
+                       <div className="flex justify-center">
+                          <div className="relative inline-block">
+                            <img
+                              src={`data:${source.data.mimeType};base64,${source.data.data}`}
+                              alt="Source material"
+                              className="max-w-full h-auto block rounded-md border border-slate-200"
+                            />
+                            {worksheet.diagramLabels?.map((label, i) => (
+                                <div key={i} className="absolute" style={{
+                                    left: `${label.x}%`,
+                                    top: `${label.y}%`,
+                                    transform: `translate(-50%, -50%) ${label.rotate ? `rotate(${label.rotate}deg)` : ''}`,
+                                    fontSize: '11pt',
+                                    color: 'black'
+                                }}>
+                                    <LatexRenderer as="span" content={label.text} />
+                                </div>
+                            ))}
+                          </div>
+                        </div>
                     </div>
                   );
                 }
@@ -365,11 +380,23 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
                   <div key={index}>
                     <h4 className="font-semibold text-slate-600 mb-2">{label}: Diagram</h4>
                     <div className="flex justify-center p-4 bg-white rounded-md border">
-                        <img
-                            src={`data:${source.data.mimeType};base64,${source.data.data}`}
-                            alt="AI generated diagram"
-                            className="max-w-full h-auto"
-                        />
+                        <div className="relative inline-block">
+                            <img
+                                src={`data:${source.data.mimeType};base64,${source.data.data}`}
+                                alt="AI generated diagram"
+                                className="max-w-full h-auto block"
+                            />
+                            {worksheet.diagramLabels?.map((label, i) => (
+                                <div key={i} className="absolute" style={{
+                                    left: `${label.x}%`,
+                                    top: `${label.y}%`,
+                                    transform: `translate(-50%, -50%) ${label.rotate ? `rotate(${label.rotate}deg)` : ''}`,
+                                    textShadow: '0px 0px 3px white, 0px 0px 3px white, 0px 0px 3px white'
+                                }}>
+                                    <LatexRenderer as="span" content={label.text} />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                   </div>
                 );

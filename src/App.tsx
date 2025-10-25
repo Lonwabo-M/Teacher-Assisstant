@@ -1,14 +1,18 @@
 import React, { useState, useCallback } from 'react';
-import { generateLesson } from './services/geminiService';
-import type { LessonData, UserInputs } from './types';
+import { generateLesson, generateQuestionPaper } from './services/geminiService';
+import type { HistoryItem, UserInputs, QuestionPaperInputs } from './types';
 import Header from './components/Header';
 import InputForm from './components/InputForm';
 import Loader from './components/Loader';
 import ErrorMessage from './components/ErrorMessage';
 import LessonOutput from './components/LessonOutput';
 import HistorySidebar from './components/HistorySidebar';
+import QuestionPaperForm from './components/QuestionPaperForm';
+import QuestionPaperOutput from './components/QuestionPaperOutput';
 
-const defaultInputs: UserInputs = {
+type AppMode = 'lesson' | 'paper';
+
+const defaultLessonInputs: UserInputs = {
   goals: '',
   standard: 'CAPS',
   grade: 'Grade 10',
@@ -17,30 +21,48 @@ const defaultInputs: UserInputs = {
   includeChart: false,
 };
 
+const defaultPaperInputs: QuestionPaperInputs = {
+  subject: 'Mathematics',
+  grade: 'Grade 12',
+  examType: 'Term Exam',
+  totalMarks: '100',
+  topics: '',
+  generateDiagram: false,
+  includeChart: false,
+};
+
 const App: React.FC = () => {
+  const [mode, setMode] = useState<AppMode>('lesson');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [lessonData, setLessonData] = useState<LessonData | null>(null);
-  // Use in-memory state instead of localStorage
-  const [lessonHistory, setLessonHistory] = useState<LessonData[]>([]);
+  const [activeItem, setActiveItem] = useState<HistoryItem | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
-  const [currentInputs, setCurrentInputs] = useState<UserInputs>(defaultInputs);
 
-  const handleGenerateLesson = useCallback(async (inputs: UserInputs) => {
+  // State to hold the inputs for each form independently
+  const [currentLessonInputs, setCurrentLessonInputs] = useState<UserInputs>(defaultLessonInputs);
+  const [currentPaperInputs, setCurrentPaperInputs] = useState<QuestionPaperInputs>(defaultPaperInputs);
+  
+  const handleGenerate = useCallback(async (inputs: UserInputs | QuestionPaperInputs, generationMode: AppMode) => {
     setIsLoading(true);
     setError(null);
-    setLessonData(null);
+    setActiveItem(null);
     try {
-      const data = await generateLesson(inputs);
-      const newLesson: LessonData = {
+      let data;
+      if (generationMode === 'lesson') {
+        data = await generateLesson(inputs as UserInputs);
+      } else {
+        data = await generateQuestionPaper(inputs as QuestionPaperInputs);
+      }
+      
+      const newItem: HistoryItem = {
         ...data,
         id: Date.now().toString(),
         inputs
       };
-      setLessonData(newLesson);
       
-      // Store in memory only, keep last 10 lessons
-      setLessonHistory(prevHistory => [newLesson, ...prevHistory.slice(0, 9)]);
+      setActiveItem(newItem);
+      setHistory(prevHistory => [newItem, ...prevHistory.slice(0, 19)]);
 
     } catch (err) {
       console.error(err);
@@ -50,23 +72,65 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleSelectLesson = (lesson: LessonData) => {
-    setLessonData(lesson);
-    setCurrentInputs(lesson.inputs); // Update the form with the selected lesson's inputs
-    setIsSidebarOpen(false); // Close sidebar on selection in mobile
+  const handleSelectItem = (item: HistoryItem) => {
+    setMode(item.type);
+    setActiveItem(item);
+    if (item.type === 'lesson') {
+      setCurrentLessonInputs(item.inputs as UserInputs);
+    } else {
+      setCurrentPaperInputs(item.inputs as QuestionPaperInputs);
+    }
+    setIsSidebarOpen(false);
   }
 
   const handleClearHistory = () => {
-    setLessonHistory([]);
-    setLessonData(null);
-    setCurrentInputs(defaultInputs); // Reset the form to its default state
+    setHistory([]);
+    setActiveItem(null);
+    setCurrentLessonInputs(defaultLessonInputs);
+    setCurrentPaperInputs(defaultPaperInputs);
   }
 
   const handleCreateNew = () => {
-    setLessonData(null);
+    setActiveItem(null);
     setError(null);
-    setCurrentInputs(defaultInputs);
+    // Do not reset inputs, let the user continue from where they were
     setIsSidebarOpen(false);
+  };
+  
+  const renderActiveComponent = () => {
+    if (!activeItem) {
+      return (
+        <>
+          {mode === 'lesson' ? (
+            <InputForm 
+              inputs={currentLessonInputs}
+              onInputChange={setCurrentLessonInputs}
+              onGenerate={(inputs) => handleGenerate(inputs, 'lesson')} 
+              isLoading={isLoading} 
+            />
+          ) : (
+            <QuestionPaperForm
+              inputs={currentPaperInputs}
+              onInputChange={setCurrentPaperInputs}
+              onGenerate={(inputs) => handleGenerate(inputs, 'paper')}
+              isLoading={isLoading}
+            />
+          )}
+          <div className="mt-12">
+            {isLoading && <Loader />}
+            {error && <ErrorMessage message={error} />}
+          </div>
+        </>
+      );
+    }
+
+    if (activeItem.type === 'lesson') {
+      return <LessonOutput data={activeItem} />;
+    }
+    if (activeItem.type === 'paper') {
+      return <QuestionPaperOutput data={activeItem} />;
+    }
+    return null;
   };
 
   return (
@@ -81,38 +145,44 @@ const App: React.FC = () => {
            ></div>
         )}
         <HistorySidebar
-          history={lessonHistory}
-          onSelectLesson={handleSelectLesson}
+          history={history}
+          onSelectItem={handleSelectItem}
           onClearHistory={handleClearHistory}
           onCreateNew={handleCreateNew}
-          activeLessonId={lessonData?.id}
+          activeItemId={activeItem?.id}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
-          showCreateNewButton={!!lessonData}
+          showCreateNewButton={!!activeItem}
         />
         <main className="flex-grow p-4 md:p-8">
           <div className="max-w-4xl mx-auto">
-            {!lessonData ? (
-              <>
-                {!isLoading && !error && (
-                  <p className="text-center text-slate-600 mb-8">
-                    Simply provide your curriculum goals, select a standard, and let our AI craft a complete, high-quality lesson package for you in moments.
-                  </p>
-                )}
-                <InputForm 
-                  inputs={currentInputs}
-                  onInputChange={setCurrentInputs}
-                  onGenerate={handleGenerateLesson} 
-                  isLoading={isLoading} 
-                />
-                <div className="mt-12">
-                  {isLoading && <Loader />}
-                  {error && <ErrorMessage message={error} />}
-                </div>
-              </>
-            ) : (
-              <LessonOutput data={lessonData} />
+            {/* Mode Toggle */}
+            {!activeItem && !isLoading && (
+              <div className="mb-8 p-1.5 bg-slate-200 rounded-xl flex items-center max-w-md mx-auto">
+                <button
+                  onClick={() => setMode('lesson')}
+                  className={`flex-1 text-center px-4 py-2 rounded-lg transition-all duration-300 font-semibold ${mode === 'lesson' ? 'bg-white text-sky-600 shadow-sm' : 'bg-transparent text-slate-600'}`}
+                >
+                  Lesson Generator
+                </button>
+                <button
+                  onClick={() => setMode('paper')}
+                  className={`flex-1 text-center px-4 py-2 rounded-lg transition-all duration-300 font-semibold ${mode === 'paper' ? 'bg-white text-sky-600 shadow-sm' : 'bg-transparent text-slate-600'}`}
+                >
+                  Question Paper Generator
+                </button>
+              </div>
             )}
+            
+            {!activeItem && !isLoading && !error && (
+              <p className="text-center text-slate-600 mb-8">
+                {mode === 'lesson' 
+                  ? "Simply provide your curriculum goals, select a standard, and let our AI craft a complete lesson package for you."
+                  : "Design a custom, CAPS-aligned question paper with a full memorandum in minutes."}
+              </p>
+            )}
+
+            {renderActiveComponent()}
           </div>
         </main>
       </div>

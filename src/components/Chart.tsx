@@ -53,43 +53,69 @@ const Chart: React.FC<ChartProps> = ({ chartData, showControls = true }) => {
   ];
 
   // --- Chart Scale Calculation ---
-  let chartMax = Math.max(0, ...dataset.data);
-  let chartMin = Math.min(0, ...dataset.data);
-
-  if (chartMax > 0) {
-    chartMax *= 1.1;
-  } else if (dataset.data.every(d => d <= 0)) {
-    if (dataset.data.every(d => d === 0)) {
-      chartMax = 1;
+  const calculateNiceScale = (dataPoints: number[]) => {
+    if (!dataPoints || dataPoints.length === 0) {
+      return { chartMin: 0, chartMax: 10, chartRange: 10, step: 2 };
     }
-  }
 
-  if (chartMin < 0) {
-    chartMin *= 1.1;
-  }
-  
-  if (chartMax === chartMin && chartMax !== 0) {
-      if (chartMax > 0) {
-          chartMin = 0;
-      } else {
-          chartMax = 0;
-      }
-  }
+    let dataMin = Math.min(...dataPoints);
+    let dataMax = Math.max(...dataPoints);
 
-  const chartRange = chartMax - chartMin;
+    if (dataMin === dataMax) {
+      const padding = Math.abs(dataMin * 0.1) || 1;
+      dataMin -= padding;
+      dataMax += padding;
+    }
+    
+    // Determine the rough range and add some padding
+    let range = dataMax - dataMin;
+    const padding = range * 0.1;
+    let chartMin = dataMin - padding;
+    let chartMax = dataMax + padding;
+
+    // Anchor to zero if the data is all positive or all negative, but not far from zero
+    if (dataMin >= 0 && dataMin < range) chartMin = 0;
+    if (dataMax <= 0 && Math.abs(dataMax) < range) chartMax = 0;
+    
+    // Recalculate range after anchoring
+    range = chartMax - chartMin;
+    
+    const targetSteps = 4;
+    const roughStep = range / targetSteps;
+
+    // Calculate a 'nice' step value (e.g., 1, 2, 5, 10, 20, 50...)
+    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+    const residual = roughStep / magnitude;
+
+    let niceStep;
+    if (residual > 5) niceStep = 10 * magnitude;
+    else if (residual > 2) niceStep = 5 * magnitude;
+    else if (residual > 1) niceStep = 2 * magnitude;
+    else niceStep = magnitude;
+
+    // Adjust the final min and max to be multiples of the nice step
+    const finalMin = Math.floor(chartMin / niceStep) * niceStep;
+    const finalMax = Math.ceil(chartMax / niceStep) * niceStep;
+    const finalRange = finalMax - finalMin;
+
+    return { chartMin: finalMin, chartMax: finalMax, chartRange: finalRange, step: niceStep };
+  };
+
+  const { chartMin, chartMax, chartRange, step } = calculateNiceScale(dataset.data);
 
   const yAxisLabels = () => {
     const labels = [];
-    const steps = 4;
-    for (let i = 0; i <= steps; i++) {
-        const value = chartMin + (chartRange / steps) * i;
-        let label;
-        if (Math.abs(chartRange) > 0 && Math.abs(chartRange) < 5) {
-             label = value.toFixed(1);
-        } else {
-             label = Math.round(value).toString();
-        }
-        labels.push(<span key={i}>{label}</span>);
+    if (!isFinite(chartRange) || chartRange <= 0 || !step) return [];
+
+    // Determine number of decimal places from step size to avoid floating point issues
+    const decimals = Math.max(0, -Math.floor(Math.log10(step) + 0.0000001));
+    const numLabels = Math.round(chartRange / step) + 1;
+
+    for (let i = 0; i < numLabels; i++) {
+      const value = chartMin + (i * step);
+      // Use toPrecision to handle floating point errors before rounding with toFixed
+      const labelText = parseFloat(value.toPrecision(15)).toFixed(decimals);
+      labels.push(<span key={i}>{labelText}</span>);
     }
     return labels.reverse();
   };
@@ -122,9 +148,9 @@ const Chart: React.FC<ChartProps> = ({ chartData, showControls = true }) => {
     return (
         <div className="w-full h-full p-0">
             <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full" preserveAspectRatio="none">
-              {[...Array(5)].map((_, i) => {
-                  const value = chartMin + (chartRange / 5) * (i + 1);
-                  if (Math.abs(value - 0) < 0.01) return null;
+              {[...Array(Math.round(chartRange/step) + 1)].map((_, i) => {
+                  const value = chartMin + (step * i);
+                  if (Math.abs(value - 0) < 0.001) return null; // Don't redraw over zero line
                   const y = getPoint(value, 0).y;
                   return <line key={`grid-${i}`} x1={padding.left} y1={y} x2={svgWidth - padding.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />;
               })}
@@ -202,9 +228,9 @@ const Chart: React.FC<ChartProps> = ({ chartData, showControls = true }) => {
         <div className="w-full h-full p-0">
             <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full" preserveAspectRatio="none">
                 {/* Grid lines */}
-                {[...Array(5)].map((_, i) => {
-                    const value = chartMin + (chartRange / 5) * (i + 1);
-                    if (Math.abs(value - 0) < 0.01) return null;
+                {[...Array(Math.round(chartRange/step) + 1)].map((_, i) => {
+                    const value = chartMin + (step * i);
+                    if (Math.abs(value - 0) < 0.001) return null; // Don't redraw over zero line
                     const y = getY(value);
                     return <line key={`grid-${i}`} x1={padding.left} y1={y} x2={svgWidth - padding.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />;
                 })}
@@ -324,7 +350,7 @@ const Chart: React.FC<ChartProps> = ({ chartData, showControls = true }) => {
             {isDownloading ? (
               <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 * 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             ) : (
               <DownloadIcon />

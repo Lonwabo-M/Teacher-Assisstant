@@ -7,6 +7,16 @@ export interface UserInputs {
   includeChart?: boolean;
 }
 
+export interface QuestionPaperInputs {
+  subject: string;
+  grade: string;
+  examType: 'Class Test' | 'Term Exam' | 'Final Exam';
+  totalMarks: string;
+  topics: string; // Comma-separated list of chapters/topics
+  generateDiagram?: boolean;
+  includeChart?: boolean;
+}
+
 export interface LessonPlanSection {
   title: string;
   duration: string;
@@ -34,6 +44,12 @@ export interface WorksheetSection {
   questions: WorksheetQuestion[];
 }
 
+export interface DiagramLabel {
+  text: string;
+  x: number; // Percentage from left
+  y: number; // Percentage from top
+  rotate?: number; // Optional rotation in degrees
+}
 
 export interface Worksheet {
   title: string;
@@ -47,6 +63,7 @@ export interface Worksheet {
     data: string; // base64 encoded string
     mimeType: string;
   };
+  diagramLabels?: DiagramLabel[];
 }
 
 export interface ChartData {
@@ -63,6 +80,7 @@ export interface ChartData {
 }
 
 export interface LessonData {
+  type: 'lesson';
   id: string;
   inputs: UserInputs;
   lessonPlan: LessonPlanSection[];
@@ -70,6 +88,33 @@ export interface LessonData {
   worksheet: Worksheet;
   chartData?: ChartData;
 }
+
+export interface ExamQuestion {
+  questionNumber: string; // e.g., "1.1", "2.3.1"
+  questionText: string;
+  markAllocation: number;
+  answer: string;
+  bloomTaxonomyLevel: string;
+}
+
+export interface QuestionPaperData {
+    type: 'paper';
+    id: string;
+    inputs: QuestionPaperInputs;
+    title: string;
+    instructions: string[];
+    questions: ExamQuestion[];
+    generatedImage?: {
+        data: string; // base64
+        mimeType: string;
+    };
+    diagramLabels?: DiagramLabel[];
+    chartData?: ChartData;
+}
+
+
+export type HistoryItem = LessonData | QuestionPaperData;
+
 
 export interface PdfOptions {
   filename: string;

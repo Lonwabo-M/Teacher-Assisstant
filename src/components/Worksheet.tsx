@@ -131,7 +131,10 @@ const PrintableWorksheet: React.FC<{
                                     top: `${label.y}%`,
                                     transform: `translate(-50%, -50%) ${label.rotate ? `rotate(${label.rotate}deg)` : ''}`,
                                     fontSize: '11pt',
-                                    color: 'black'
+                                    color: 'black',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                                    padding: '0 2px',
+                                    borderRadius: '2px',
                                 }}>
                                     <LatexRenderer as="span" content={label.text} />
                                 </div>

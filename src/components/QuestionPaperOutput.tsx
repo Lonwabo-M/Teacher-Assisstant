@@ -53,7 +53,16 @@ const PrintablePaper: React.FC<{ data: QuestionPaperData, isMemo: boolean }> = (
                     <div className="relative inline-block">
                         <img src={`data:${source.data.mimeType};base64,${source.data.data}`} alt={`Source ${String.fromCharCode(65 + index)}`} className="max-w-full h-auto block rounded-md border" />
                         {source.labels?.map((label, i) => (
-                            <div key={i} className="absolute" style={{ left: `${label.x}%`, top: `${label.y}%`, transform: `translate(-50%, -50%) ${label.rotate ? `rotate(${label.rotate}deg)` : ''}`}}>
+                            <div key={i} className="absolute" style={{ 
+                                left: `${label.x}%`, 
+                                top: `${label.y}%`, 
+                                transform: `translate(-50%, -50%) ${label.rotate ? `rotate(${label.rotate}deg)` : ''}`,
+                                fontSize: '12pt',
+                                color: 'black',
+                                backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                                padding: '0 2px',
+                                borderRadius: '2px',
+                            }}>
                                 <LatexRenderer as="span" content={label.text} />
                             </div>
                         ))}
@@ -68,27 +77,38 @@ const PrintablePaper: React.FC<{ data: QuestionPaperData, isMemo: boolean }> = (
       
       <div className="space-y-2">
         {questions.map((q, index) => {
-           // A heading is a question with 0 marks AND a question number that is a single integer (e.g., "1", "2").
-           // This prevents question stems like "1.3" from being treated as headings.
-           const isHeading = q.markAllocation === 0 && /^\d+$/.test(q.questionNumber.trim());
+           // A heading is a question with 0 marks AND a question number like "1" or "QUESTION 1".
+           const isHeading = q.markAllocation === 0 && /^(QUESTION\s*)?\d+$/.test(q.questionNumber.trim().toUpperCase());
 
            if (isHeading && !isMemo) {
              let sectionMarks = 0;
              // Calculate total marks for this section by summing until the next heading is found.
              for (let i = index + 1; i < questions.length; i++) {
                 const nextQ = questions[i];
-                if (nextQ.markAllocation === 0 && /^\d+$/.test(nextQ.questionNumber.trim())) {
+                // Use the same robust check for the next heading
+                if (nextQ.markAllocation === 0 && /^(QUESTION\s*)?\d+$/.test(nextQ.questionNumber.trim().toUpperCase())) {
                     break; // Stop at the next main question heading
                 }
                 sectionMarks += nextQ.markAllocation;
              }
 
+             let headingNumber = q.questionNumber.trim();
+             if (!headingNumber.toUpperCase().startsWith('QUESTION')) {
+                 headingNumber = `QUESTION ${headingNumber}`;
+             }
+
              return (
                 <div key={index} className="pt-8" style={{ breakInside: 'avoid-page' }}>
                     <h3 className="text-lg font-bold text-slate-800 border-t-2 border-slate-400 pt-4 flex justify-between">
-                        <LatexRenderer as="span" content={`QUESTION ${q.questionNumber}${q.questionText ? ` - ${q.questionText}` : ''}`} />
+                        <LatexRenderer as="span" content={headingNumber.toUpperCase()} />
                         {sectionMarks > 0 && <span>[{sectionMarks}]</span>}
                     </h3>
+                    {/* If there's instructional text, render it below the heading */}
+                    {q.questionText && (
+                        <div className="mt-2 text-slate-700">
+                            <LatexRenderer content={q.questionText} />
+                        </div>
+                    )}
                 </div>
              );
            }

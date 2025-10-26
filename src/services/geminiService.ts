@@ -1,6 +1,8 @@
 
 
 
+
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { UserInputs, LessonData, QuestionPaperInputs, QuestionPaperData } from '../types';
 
@@ -92,7 +94,7 @@ const lessonResponseSchema = {
         },
         diagramLabels: {
           type: Type.ARRAY,
-          description: "An array of text labels to be overlaid on the generated diagram. Omit if no diagram is generated.",
+          description: "CRITICAL: An array of text labels to be overlaid on the generated diagram. Ensure labels are clearly positioned and DO NOT overlap with each other or obscure important parts of the diagram. Omit if no diagram is generated.",
           items: {
             type: Type.OBJECT,
             properties: {
@@ -649,13 +651,14 @@ To ensure the generated visuals are of exam quality, follow these subject-specif
 
 **CRITICAL RULES:**
 1.  **Verification First:** Before generating any content, you MUST first verify that the user's 'goals' are appropriate for the specified grade and subject, using the detailed curriculum context provided above. If the goal is about a topic not listed (e.g., 'Organic Chemistry' for a Physics lesson, or 'Newton's Laws' for a Life Sciences lesson), you MUST set \`mismatch: true\` and provide a clear \`mismatchReason\`.
-2.  **LaTeX for Math:** ALL mathematical notation, variables, formulas, and units (e.g., kg, m/s) in ANY field (questions, answers, speaker notes, etc.) MUST be enclosed in LaTeX delimiters. Use \\( ... \\) for inline math and \\[ ... \\] for block math.
-3.  **CAPS Question Style:** When generating source-based questions with a diagram for CAPS, the questions MUST be scaffolded in a multi-part, examination style, respecting the cognitive level weightings. Start with foundational questions (e.g., definitions, stating laws - Level 1/2) and then move to analytical or calculation-based questions that require using the diagram (Level 3/4).
-4.  **Diagram Generation Workflow (Mandatory):**
+2.  **LaTeX for Math:** ALL mathematical notation, variables, formulas, equations, and units (e.g., kg, m/s) in ANY field (questions, answers, speaker notes, etc.) MUST be enclosed in LaTeX delimiters. Use \\( ... \\) for inline math and \\[ ... \\] for block math. This is non-negotiable. An equation not wrapped in delimiters is a failure.
+3.  **Diagram-Question Cohesion:** The generated diagram and its labels MUST be a direct, logical, and accurate visual representation of the scenario described in the accompanying source-based question(s). All key values and variables mentioned in the question (e.g., initial velocity, height, mass, angles) must be clearly and correctly labeled on the diagram. The diagram is not a generic illustration; it is a specific component of the problem statement.
+4.  **CAPS Question Style:** When generating source-based questions with a diagram for CAPS, the questions MUST be scaffolded in a multi-part, examination style, respecting the cognitive level weightings. Start with foundational questions (e.g., definitions, stating laws - Level 1/2) and then move to analytical or calculation-based questions that require using the diagram (Level 3/4).
+5.  **Diagram Generation Workflow (Mandatory):**
     1.  **MOST IMPORTANT FIRST STEP:** If the user requests a diagram ('generateDiagram: true') AND the topic is suitable for a diagram (e.g., Physics, Biology), you MUST first create a detailed, descriptive prompt for an AI image model in the 'diagramDescription' field. This prompt MUST explicitly forbid the image model from rendering any text or labels.
     2.  **Second Step:** You MUST then provide the corresponding labels for that diagram in the 'diagramLabels' field, with their precise x/y coordinates and text formatted in LaTeX.
     3.  **Final Step:** The questions in the worksheet must then directly refer to this diagram. If the topic is not suitable for a diagram (e.g., English essay writing), you MUST omit the 'diagramDescription' and 'diagramLabels' fields entirely.
-5.  **Multi-step Calculation Formatting:** When providing a worked answer for a calculation, you MUST follow this three-step pattern for clarity and correctness, separating steps with explanatory text:
+6.  **Multi-step Calculation Formatting:** When providing a worked answer for a calculation, you MUST follow this three-step pattern for clarity and correctness, separating steps with explanatory text. EACH of the three lines (formula, substitution, final answer) MUST be individually wrapped in its own \\[ ... \\] delimiters. There are no exceptions.
     a. **Formula:** State the formula in its own block-level LaTeX line.
     b. **Substitution:** Show the substitution of values into the formula in a new block-level LaTeX line.
     c. **Final Answer:** State the final answer with units in a final block-level LaTeX line.
@@ -666,7 +669,7 @@ To ensure the generated visuals are of exam quality, follow these subject-specif
     \\[F = (6.67 \\times 10^{-11}) \\frac{(5.97 \\times 10^{24})(7.35 \\times 10^{22})}{(3.84 \\times 10^8)^2}\\]
     Finally, calculate the result:
     \\[F \\approx 1.98 \\times 10^{20} \\text{ N}\\]"
-6.  **JSON Output:** You must return the lesson package as a single, valid JSON object that strictly adheres to the provided schema. Do not include any introductory text, markdown formatting, or apologies.
+7.  **JSON Output:** You must return the lesson package as a single, valid JSON object that strictly adheres to the provided schema. Do not include any introductory text, markdown formatting, or apologies.
 `;
 
 export const generateLesson = async (inputs: UserInputs): Promise<Omit<LessonData, 'id' | 'inputs'> & { type: 'lesson' }> => {
@@ -769,7 +772,7 @@ const questionPaperResponseSchema = {
         },
         diagramLabels: {
           type: Type.ARRAY,
-          description: "An array of text labels to be overlaid on the generated diagram. Omit if no diagram is generated.",
+          description: "CRITICAL: An array of text labels to be overlaid on the generated diagram. Ensure labels are clearly positioned and DO NOT overlap with each other or obscure important parts of the diagram. Omit if no diagram is generated.",
           items: {
             type: Type.OBJECT,
             properties: {

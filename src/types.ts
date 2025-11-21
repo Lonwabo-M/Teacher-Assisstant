@@ -49,6 +49,33 @@ export interface DiagramLabel {
   x: number; // Percentage from left
   y: number; // Percentage from top
   rotate?: number; // Optional rotation in degrees
+  size?: number; // Optional size percentage (e.g., 100 for default)
+}
+
+export interface Coverup {
+  id: string;
+  x: number; // Percentage from left
+  y: number; // Percentage from top
+  width: number; // Percentage width
+  height: number; // Percentage height
+  isApplied?: boolean;
+}
+
+export interface Arrow {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface ProjectilePath {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  peakY: number; // Absolute Y position of the peak
 }
 
 export interface Worksheet {
@@ -64,6 +91,9 @@ export interface Worksheet {
     mimeType: string;
   };
   diagramLabels?: DiagramLabel[];
+  coverups?: Coverup[];
+  arrows?: Arrow[];
+  projectilePaths?: ProjectilePath[];
 }
 
 export interface ChartData {
@@ -86,6 +116,7 @@ export interface LessonData {
   lessonPlan: LessonPlanSection[];
   slides: Slide[];
   worksheet: Worksheet;
+  notes: string;
   chartData?: ChartData;
 }
 
@@ -109,6 +140,9 @@ export interface QuestionPaperData {
         mimeType: string;
     };
     diagramLabels?: DiagramLabel[];
+    coverups?: Coverup[];
+    arrows?: Arrow[];
+    projectilePaths?: ProjectilePath[];
     chartData?: ChartData;
 }
 

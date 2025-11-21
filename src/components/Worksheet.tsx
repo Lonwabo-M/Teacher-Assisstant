@@ -1,15 +1,17 @@
 import React, { useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import type { Worksheet, WorksheetQuestion, ChartData, WorksheetSection } from '../types';
+import type { Worksheet as WorksheetType, WorksheetQuestion, ChartData, DiagramLabel, Coverup, Arrow, ProjectilePath } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
 import LatexRenderer from './LatexRenderer';
 import CalculationRenderer from './CalculationRenderer';
+import DiagramEditor from './DiagramEditor';
 
 interface WorksheetProps {
-  worksheet: Worksheet;
+  worksheet: WorksheetType;
   chartData?: ChartData;
+  onUpdate: (updatedWorksheet: WorksheetType) => void;
 }
 
 const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ question, index }) => {
@@ -19,13 +21,14 @@ const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ qu
         as="div"
         content={`${index + 1}. ${question.question}`}
         className="font-semibold text-slate-700 mb-2"
+        enableMarkdown={true}
       />
       {question.type === 'multiple-choice' && question.options && (
         <ol className="space-y-1 pl-6">
           {question.options.map((option, i) => (
             <li key={i} className="flex items-start">
               <span className="mr-2 text-slate-500">{String.fromCharCode(97 + i)}.</span>
-              <LatexRenderer as="span" content={option} className="text-slate-600" />
+              <LatexRenderer as="span" content={option} className="text-slate-600" enableMarkdown={true} />
             </li>
           ))}
         </ol>
@@ -33,7 +36,7 @@ const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ qu
        {question.type === 'matching' && question.options && (
         <div className="pl-6 mt-2">
           {question.options.map((option, i) => (
-             <LatexRenderer key={i} as="div" content={option} className="text-slate-600" />
+             <LatexRenderer key={i} as="div" content={option} className="text-slate-600" enableMarkdown={true} />
           ))}
         </div>
       )}
@@ -48,10 +51,26 @@ const Question: React.FC<{ question: WorksheetQuestion; index: number }> = ({ qu
   );
 };
 
+const getProjectilePathD = (path: ProjectilePath) => {
+    const { x1, y1, x2, y2, peakY } = path;
+    const h = (x1 + x2) / 2; // vertex x is midpoint
+    const k = peakY;         // vertex y is peakY
+
+    // control point for quadratic Bezier
+    const cx = h;
+    const cy = 2 * k - (y1 + y2) / 2;
+
+    return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+};
+
 const PrintableWorksheet: React.FC<{
-  worksheet: Worksheet;
+  worksheet: WorksheetType;
   chartData?: ChartData;
-}> = ({ worksheet, chartData }) => {
+  labels: DiagramLabel[];
+  coverups: Coverup[];
+  arrows: Arrow[];
+  projectilePaths: ProjectilePath[];
+}> = ({ worksheet, chartData, labels, coverups, arrows, projectilePaths }) => {
   
   const sectionsWithSourceQuestions = new Set(
     (worksheet.sections || []).filter(sec => sec.questions.some(q => q.type === 'source-based')).map(sec => sec.title)
@@ -87,14 +106,14 @@ const PrintableWorksheet: React.FC<{
         
         <div className="mb-8">
             <h3 className="font-semibold text-lg mb-2 text-slate-800">Instructions</h3>
-            <LatexRenderer as="p" content={worksheet.instructions} className="text-slate-800" />
+            <LatexRenderer as="p" content={worksheet.instructions} className="text-slate-800" enableMarkdown={true} />
         </div>
 
         <div className="space-y-8">
             {generalSections.map((section) => (
                 <section key={section.title} className="border-b-2 border-slate-200 pb-4 last:border-b-0">
                     <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>{section.title}</h3>
-                    {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
+                    {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600" enableMarkdown={true} />}
                     <div className="divide-y divide-slate-200">
                         {(section.questions || []).map((q, qIndex) => {
                             const currentQuestionIndex = questionCounter++;
@@ -125,12 +144,33 @@ const PrintableWorksheet: React.FC<{
                               alt="Source material"
                               className="max-w-full h-auto block rounded-md border border-slate-200"
                             />
-                            {worksheet.diagramLabels?.map((label, i) => (
+                             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                <defs>
+                                    <marker id="printable-arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" />
+                                    </marker>
+                                </defs>
+                                {(projectilePaths || []).map(path => (
+                                    <path key={path.id} d={getProjectilePathD(path)} stroke="#f59e0b" strokeWidth="1" fill="none" strokeDasharray="2,2" />
+                                ))}
+                                {(arrows || []).map(arrow => (
+                                    <line key={arrow.id} x1={arrow.x1} y1={arrow.y1} x2={arrow.x2} y2={arrow.y2} stroke="#0ea5e9" strokeWidth="1" markerEnd="url(#printable-arrowhead)" />
+                                ))}
+                            </svg>
+                            {coverups?.map((cover) => (
+                                <div key={cover.id} className="absolute bg-white" style={{
+                                    left: `${cover.x}%`,
+                                    top: `${cover.y}%`,
+                                    width: `${cover.width}%`,
+                                    height: `${cover.height}%`,
+                                }} />
+                            ))}
+                            {labels?.map((label, i) => (
                                 <div key={i} className="absolute" style={{
                                     left: `${label.x}%`,
                                     top: `${label.y}%`,
                                     transform: `translate(-50%, -50%) ${label.rotate ? `rotate(${label.rotate}deg)` : ''}`,
-                                    fontSize: '11pt',
+                                    fontSize: `${(label.size || 100) / 100 * 11}pt`,
                                     color: 'black',
                                     backgroundColor: 'rgba(255, 255, 255, 0.7)',
                                     padding: '0 2px',
@@ -158,7 +198,7 @@ const PrintableWorksheet: React.FC<{
                   return (
                     <div key={index}>
                       <LatexRenderer as="h5" content={source.data.title} className="font-semibold text-sky-800 mb-4 italic" />
-                      <LatexRenderer content={source.data.content} className="text-slate-700 whitespace-pre-wrap" />
+                      <LatexRenderer content={source.data.content} className="text-slate-700 whitespace-pre-wrap" enableMarkdown={true} />
                     </div>
                   );
                 }
@@ -169,7 +209,7 @@ const PrintableWorksheet: React.FC<{
                 {sourceSections.map((section) => (
                     <section key={section.title} className="border-b-2 border-slate-200 pb-4 last:border-b-0">
                         <h3 className="font-semibold text-sky-800 mb-3" style={{ fontSize: '16pt' }}>{section.title}</h3>
-                        {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
+                        {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600" enableMarkdown={true} />}
                         <div className="divide-y divide-slate-200">
                             {(section.questions || []).map((q, qIndex) => {
                                 const currentQuestionIndex = questionCounter++;
@@ -188,7 +228,7 @@ const PrintableWorksheet: React.FC<{
 }
 
 const PrintableMemo: React.FC<{ 
-  worksheet: Worksheet
+  worksheet: WorksheetType
 }> = ({ worksheet }) => {
   let questionCounter = 0;
   return (
@@ -230,8 +270,36 @@ const PrintableMemo: React.FC<{
 };
 
 
-const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
+const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData, onUpdate }) => {
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
+  
+  const labels = worksheet.diagramLabels || [];
+  const coverups = worksheet.coverups || [];
+  const arrows = worksheet.arrows || [];
+  const projectilePaths = worksheet.projectilePaths || [];
+
+  const handleLabelsChange = (newLabels: DiagramLabel[]) => {
+    onUpdate({ ...worksheet, diagramLabels: newLabels });
+  };
+  
+  const handleCoverupsChange = (newCoverups: Coverup[]) => {
+    onUpdate({ ...worksheet, coverups: newCoverups });
+  };
+
+  const handleArrowsChange = (newArrows: Arrow[]) => {
+    onUpdate({ ...worksheet, arrows: newArrows });
+  };
+
+  const handleProjectilePathsChange = (newPaths: ProjectilePath[]) => {
+    onUpdate({ ...worksheet, projectilePaths: newPaths });
+  };
+  
+  const handleImageUpdate = (newImage: { data: string; mimeType: string }) => {
+    onUpdate({ 
+        ...worksheet, 
+        generatedImage: newImage,
+    });
+  };
 
   const handleDownload = async (type: 'worksheet' | 'memo') => {
     setIsDownloading(type);
@@ -325,7 +393,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
   return (
     <>
       <div id="worksheet-pdf-generator" style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -10, display: 'none' }}>
-          <PrintableWorksheet worksheet={worksheet} chartData={chartData} />
+          <PrintableWorksheet worksheet={worksheet} chartData={chartData} labels={labels} coverups={coverups} arrows={arrows} projectilePaths={projectilePaths} />
       </div>
       <div id="memo-pdf-generator" style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -10, display: 'none' }}>
           <PrintableMemo worksheet={worksheet} />
@@ -370,7 +438,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
         
         <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 space-y-4">
             <h3 className="text-xl font-semibold text-sky-700">Instructions</h3>
-            <LatexRenderer as="p" content={worksheet.instructions} className="text-slate-600" />
+            <LatexRenderer as="p" content={worksheet.instructions} className="text-slate-600" enableMarkdown={true} />
         </div>
 
         {sources.length > 0 && (
@@ -382,25 +450,19 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
                 return (
                   <div key={index}>
                     <h4 className="font-semibold text-slate-600 mb-2">{label}: Diagram</h4>
-                    <div className="flex justify-center p-4 bg-white rounded-md border">
-                        <div className="relative inline-block">
-                            <img
-                                src={`data:${source.data.mimeType};base64,${source.data.data}`}
-                                alt="AI generated diagram"
-                                className="max-w-full h-auto block"
-                            />
-                            {worksheet.diagramLabels?.map((label, i) => (
-                                <div key={i} className="absolute" style={{
-                                    left: `${label.x}%`,
-                                    top: `${label.y}%`,
-                                    transform: `translate(-50%, -50%) ${label.rotate ? `rotate(${label.rotate}deg)` : ''}`,
-                                    textShadow: '0px 0px 3px white, 0px 0px 3px white, 0px 0px 3px white'
-                                }}>
-                                    <LatexRenderer as="span" content={label.text} />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <DiagramEditor
+                      imageData={source.data.data}
+                      mimeType={source.data.mimeType}
+                      labels={labels}
+                      onLabelsChange={handleLabelsChange}
+                      coverups={coverups}
+                      onCoverupsChange={handleCoverupsChange}
+                      arrows={arrows}
+                      onArrowsChange={handleArrowsChange}
+                      projectilePaths={projectilePaths}
+                      onProjectilePathsChange={handleProjectilePathsChange}
+                      onImageUpdate={handleImageUpdate}
+                    />
                   </div>
                 );
               }
@@ -416,7 +478,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
                  return (
                   <div key={index}>
                     <LatexRenderer as="h4" content={source.data.title} className="font-semibold text-slate-600 mb-2" />
-                    <LatexRenderer content={source.data.content} className="text-slate-500 whitespace-pre-wrap italic" />
+                    <LatexRenderer content={source.data.content} className="text-slate-500 whitespace-pre-wrap italic" enableMarkdown={true} />
                   </div>
                 );
               }
@@ -429,7 +491,7 @@ const Worksheet: React.FC<WorksheetProps> = ({ worksheet, chartData }) => {
           {(worksheet.sections || []).map((section, sectionIndex) => (
             <div key={sectionIndex} className="bg-slate-50 p-6 rounded-lg border border-slate-200">
               <h3 className="text-xl font-semibold text-sky-700 mb-2">{section.title}</h3>
-               {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600"/>}
+               {section.content && <LatexRenderer content={section.content} className="mb-4 italic text-slate-600" enableMarkdown={true} />}
               <div className="divide-y divide-slate-200">
                 {(section.questions || []).map((q, qIndex) => {
                     const currentQuestionIndex = questionCounter++;

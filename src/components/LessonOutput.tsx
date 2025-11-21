@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { LessonData } from '../types';
+import type { LessonData, Worksheet as WorksheetType } from '../types';
 import LessonPlan from './LessonPlan';
 import Slides from './Slides';
 import Worksheet from './Worksheet';
@@ -8,21 +8,28 @@ import { BookOpenIcon } from './icons/BookOpenIcon';
 import { PresentationIcon } from './icons/PresentationIcon';
 import { ClipboardListIcon } from './icons/ClipboardListIcon';
 import { ChartBarIcon } from './icons/ChartBarIcon';
+import { NoteIcon } from './icons/NoteIcon';
+import Notes from './Notes';
 
 interface LessonOutputProps {
   data: LessonData;
+  onUpdate: (updatedData: LessonData) => void;
 }
 
-type Tab = 'plan' | 'slides' | 'worksheet' | 'chart';
+type Tab = 'plan' | 'slides' | 'worksheet' | 'notes' | 'chart';
 
-const LessonOutput: React.FC<LessonOutputProps> = ({ data }) => {
+const LessonOutput: React.FC<LessonOutputProps> = ({ data, onUpdate }) => {
   const [activeTab, setActiveTab] = useState<Tab>('plan');
+  
+  const handleWorksheetUpdate = (updatedWorksheet: WorksheetType) => {
+    onUpdate({ ...data, worksheet: updatedWorksheet });
+  };
 
-  // FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
   const tabs: {id: Tab, label: string, icon: React.ReactElement}[] = [
     { id: 'plan', label: 'Lesson Plan', icon: <BookOpenIcon /> },
     { id: 'slides', label: 'Slides', icon: <PresentationIcon /> },
     { id: 'worksheet', label: 'Worksheet', icon: <ClipboardListIcon /> },
+    { id: 'notes', label: 'Notes', icon: <NoteIcon /> },
   ];
 
   if (data.chartData) {
@@ -30,14 +37,16 @@ const LessonOutput: React.FC<LessonOutputProps> = ({ data }) => {
   }
 
   const renderContent = () => {
+    const lessonTitle = data.slides?.[0]?.title || 'Untitled Lesson';
     switch (activeTab) {
       case 'plan':
-        const lessonTitle = data.slides?.[0]?.title || 'Untitled Lesson';
         return <LessonPlan plan={data.lessonPlan} title={lessonTitle} />;
       case 'slides':
         return <Slides slides={data.slides} inputs={data.inputs} chartData={data.chartData} />;
       case 'worksheet':
-        return <Worksheet worksheet={data.worksheet} chartData={data.chartData} />;
+        return <Worksheet worksheet={data.worksheet} onUpdate={handleWorksheetUpdate} chartData={data.chartData} />;
+      case 'notes':
+        return <Notes notes={data.notes} title={lessonTitle} />;
       case 'chart':
         return data.chartData ? <Chart chartData={data.chartData} /> : null;
       default:

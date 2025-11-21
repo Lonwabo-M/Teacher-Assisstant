@@ -3,20 +3,31 @@ import { MenuIcon } from './icons/MenuIcon';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
+  onLogoClick: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
+const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onLogoClick }) => {
   return (
     <header className="bg-white shadow-md sticky top-0 z-20">
       <div className="container mx-auto px-4 md:px-8 py-4 flex items-center justify-between md:justify-center">
-        <div className="flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-sky-600 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        <button onClick={onLogoClick} className="flex items-center cursor-pointer" aria-label="Go to homepage">
+            <svg aria-label="LessonLab Logo" role="img" viewBox="0 0 185 32" className="h-8 w-auto">
+                <g fill="#0000FF">
+                    <circle cx="8" cy="8" r="6" />
+                    <circle cx="26" cy="24" r="8" />
+                </g>
+                <text
+                    x="42"
+                    y="25"
+                    fontFamily="sans-serif"
+                    fontSize="24"
+                    fontWeight="500"
+                    fill="black"
+                >
+                    LessonLab
+                </text>
             </svg>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-800">
-              Automated <span className="text-sky-600">Lesson Generator</span>
-            </h1>
-        </div>
+        </button>
 
         <button 
           onClick={onToggleSidebar} 

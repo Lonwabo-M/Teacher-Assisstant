@@ -111,3 +111,72 @@ export const generateLessonPlanDocx = async (plan: LessonPlanSection[], lessonTi
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
+
+
+/**
+ * Creates a .docx file from student notes and initiates a download.
+ * @param notes The notes content string.
+ * @param lessonTitle The title of the lesson, used for the filename.
+ */
+export const generateNotesDocx = async (notes: string, lessonTitle: string) => {
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+
+  const children: any[] = [
+    new Paragraph({
+      text: `${lessonTitle} - Student Notes`,
+      heading: HeadingLevel.TITLE,
+      alignment: AlignmentType.CENTER,
+    }),
+  ];
+
+  // Basic markdown-to-docx conversion for notes
+  const contentLines = stripLatex(notes).split('\n');
+  contentLines.forEach(line => {
+    const trimmedLine = line.trim();
+    if (trimmedLine.startsWith('### ')) {
+      children.push(new Paragraph({
+        text: trimmedLine.substring(4),
+        heading: HeadingLevel.HEADING_3,
+        spacing: { before: 200, after: 100 },
+      }));
+    } else if (trimmedLine.startsWith('- ')) {
+      children.push(new Paragraph({
+        text: trimmedLine.substring(2),
+        bullet: { level: 0 },
+      }));
+    } else if (trimmedLine) {
+      children.push(new Paragraph({ text: trimmedLine, spacing: { after: 100 } }));
+    }
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: children,
+    }],
+    styles: {
+      paragraphStyles: [
+        {
+            id: "Normal",
+            name: "Normal",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: {
+                size: 24, // 12pt
+            },
+        },
+      ]
+    }
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${lessonTitle.replace(/\s+/g, '_')}-notes.docx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};

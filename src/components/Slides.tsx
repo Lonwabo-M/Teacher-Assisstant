@@ -38,7 +38,7 @@ const PrintableSlidePage: React.FC<{
           </div>
         ) : (
           <ul className="text-3xl list-disc list-outside pl-8 space-y-4 text-left max-w-4xl">
-            {slide.content.map((point, i) => <LatexRenderer as="li" key={i} content={point} />)}
+            {slide.content.map((point, i) => <LatexRenderer as="li" key={i} content={point} enableMarkdown={true} />)}
           </ul>
         )}
       </div>
@@ -47,7 +47,7 @@ const PrintableSlidePage: React.FC<{
       {slide.speakerNotes && (
         <div className="flex-shrink-0 mt-8 pt-4 border-t-2 border-slate-200">
           <h4 className="font-bold text-lg text-slate-700 mb-2">Speaker Notes:</h4>
-          <LatexRenderer content={slide.speakerNotes} className="text-base text-slate-600 whitespace-pre-wrap" />
+          <LatexRenderer content={slide.speakerNotes} className="text-base text-slate-600 whitespace-pre-wrap" enableMarkdown={true} />
         </div>
       )}
 
@@ -166,7 +166,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
                     </>
                   ) : (
                     slide.content.map((point, pointIndex) => (
-                      <LatexRenderer as="li" key={pointIndex} content={point} />
+                      <LatexRenderer as="li" key={pointIndex} content={point} enableMarkdown={true} />
                     ))
                   )}
                 </ul>
@@ -177,7 +177,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                     Speaker Notes
                   </h4>
-                  <LatexRenderer content={slide.speakerNotes} className="text-sm text-slate-500 whitespace-pre-wrap mt-1 pl-6" />
+                  <LatexRenderer content={slide.speakerNotes} className="text-sm text-slate-500 whitespace-pre-wrap mt-1 pl-6" enableMarkdown={true} />
                 </div>
               )}
             </div>

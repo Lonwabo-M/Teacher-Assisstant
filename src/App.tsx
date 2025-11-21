@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { generateLesson, generateQuestionPaper } from './services/geminiService';
-import type { HistoryItem, UserInputs, QuestionPaperInputs } from './types';
+import type { HistoryItem, UserInputs, QuestionPaperInputs, LessonData, QuestionPaperData } from './types';
 import Header from './components/Header';
 import InputForm from './components/InputForm';
 import Loader from './components/Loader';
@@ -9,8 +9,10 @@ import LessonOutput from './components/LessonOutput';
 import HistorySidebar from './components/HistorySidebar';
 import QuestionPaperForm from './components/QuestionPaperForm';
 import QuestionPaperOutput from './components/QuestionPaperOutput';
+import HomePage from './components/HomePage';
 
 type AppMode = 'lesson' | 'paper';
+type AppView = 'home' | 'app';
 
 const defaultLessonInputs: UserInputs = {
   goals: '',
@@ -32,6 +34,7 @@ const defaultPaperInputs: QuestionPaperInputs = {
 };
 
 const App: React.FC = () => {
+  const [view, setView] = useState<AppView>('home');
   const [mode, setMode] = useState<AppMode>('lesson');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +61,8 @@ const App: React.FC = () => {
       const newItem: HistoryItem = {
         ...data,
         id: Date.now().toString(),
-        inputs
+        inputs,
+        type: generationMode, // FIX: Added type to ensure history item is correctly identified
       };
       
       setActiveItem(newItem);
@@ -97,6 +101,14 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
   };
   
+  const handleActiveItemUpdate = useCallback((updatedItem: HistoryItem) => {
+    setActiveItem(updatedItem);
+    setHistory(prevHistory => 
+      prevHistory.map(item => (item.id === updatedItem.id ? updatedItem : item))
+    );
+  }, []);
+
+
   const renderActiveComponent = () => {
     if (!activeItem) {
       return (
@@ -125,17 +137,21 @@ const App: React.FC = () => {
     }
 
     if (activeItem.type === 'lesson') {
-      return <LessonOutput data={activeItem} />;
+      return <LessonOutput data={activeItem as LessonData} onUpdate={handleActiveItemUpdate} />;
     }
     if (activeItem.type === 'paper') {
-      return <QuestionPaperOutput data={activeItem} />;
+      return <QuestionPaperOutput data={activeItem as QuestionPaperData} onUpdate={handleActiveItemUpdate} />;
     }
     return null;
   };
 
+  if (view === 'home') {
+    return <HomePage onStartCreating={() => setView('app')} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+      <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} onLogoClick={() => setView('home')}/>
       <div className="flex">
         {isSidebarOpen && (
            <div 
@@ -187,7 +203,7 @@ const App: React.FC = () => {
         </main>
       </div>
        <footer className="text-center p-4 text-slate-500 text-sm bg-slate-100 border-t border-slate-200">
-        <p>&copy; 2024 Automated Lesson Generator. Empowering Educators with AI.</p>
+        <p>&copy; 2024 LessonLab. Empowering Educators with AI.</p>
       </footer>
     </div>
   );

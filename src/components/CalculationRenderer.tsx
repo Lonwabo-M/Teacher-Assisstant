@@ -10,8 +10,12 @@ interface CalculationRendererProps {
 const CalculationRenderer: React.FC<CalculationRendererProps> = ({ content, className, style }) => {
   if (!content) return null;
 
+  // Pre-process the string to enforce newlines between consecutive block equations.
+  // This corrects AI generation errors where multiple \\[...\\] blocks are on the same line.
+  const formattedContent = content.replace(/\\\]\s*\\\[/g, '\\]\n\\[');
+
   // Split content into individual lines to handle text and block equations separately.
-  const lines = content.split('\n');
+  const lines = formattedContent.split('\n');
 
   return (
     <div className={className} style={style}>

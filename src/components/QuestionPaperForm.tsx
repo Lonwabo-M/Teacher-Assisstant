@@ -9,13 +9,14 @@ interface QuestionPaperFormProps {
 }
 
 const subjects = [
-  'Accounting', 'Afrikaans First Additional Language', 'Business Studies', 'Computer Applications Technology', 'Consumer Studies', 'Dramatic Arts', 'Economics', 'Engineering Graphics and Design', 'English Home Language', 'Geography', 'History', 'Information Technology', 'Life Orientation', 'Life Sciences', 'Mathematics', 'Mathematical Literacy', 'Music', 'Physical Sciences', 'Visual Arts'
+  'Accounting', 'Afrikaans First Additional Language', 'Business Studies', 'Computer Applications Technology', 'Consumer Studies', 'Creative Arts', 'Dramatic Arts', 'Economic and Management Sciences', 'Economics', 'Engineering Graphics and Design', 'English Home Language', 'Geography', 'History', 'Information Technology', 'Life Orientation', 'Life Sciences', 'Mathematics', 'Mathematical Literacy', 'Music', 'Natural Sciences', 'Physical Sciences', 'Social Sciences', 'Technology', 'Visual Arts'
 ];
-const grades = ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+const grades = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
 const examTypes = ['Class Test', 'Term Exam', 'Final Exam'];
 
 const QuestionPaperForm: React.FC<QuestionPaperFormProps> = ({ inputs, onInputChange, onGenerate, isLoading }) => {
-  
+  const isFinalExam = inputs.examType === 'Final Exam';
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     if (type === 'checkbox') {
@@ -28,11 +29,11 @@ const QuestionPaperForm: React.FC<QuestionPaperFormProps> = ({ inputs, onInputCh
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputs.topics && inputs.totalMarks) {
-      onGenerate(inputs);
-    } else {
-      alert("Please fill in all required fields.");
+    if ((!isFinalExam && !inputs.topics) || !inputs.totalMarks) {
+      alert("Please fill in all required fields (Topics and Total Marks).");
+      return;
     }
+    onGenerate(inputs);
   };
 
   return (
@@ -45,11 +46,12 @@ const QuestionPaperForm: React.FC<QuestionPaperFormProps> = ({ inputs, onInputCh
           <textarea
             id="topics"
             name="topics"
-            value={inputs.topics}
+            value={isFinalExam ? "All topics for the year will be included automatically." : inputs.topics}
             onChange={handleChange}
             placeholder="e.g., 'Newton's Laws, Momentum and Impulse, Work-Energy Theorem'"
-            className="w-full h-24 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition duration-200"
-            required
+            className="w-full h-24 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition duration-200 disabled:bg-slate-100 disabled:text-slate-500"
+            required={!isFinalExam}
+            disabled={isFinalExam}
           />
         </div>
 

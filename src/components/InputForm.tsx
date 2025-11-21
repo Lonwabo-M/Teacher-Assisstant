@@ -17,7 +17,9 @@ const subjects = [
   'Business Studies',
   'Computer Applications Technology',
   'Consumer Studies',
+  'Creative Arts',
   'Dramatic Arts',
+  'Economic and Management Sciences',
   'Economics',
   'Engineering Graphics and Design',
   'English Home Language',
@@ -29,11 +31,14 @@ const subjects = [
   'Mathematics',
   'Mathematical Literacy',
   'Music',
+  'Natural Sciences',
   'Physical Sciences',
+  'Social Sciences',
+  'Technology',
   'Visual Arts'
 ];
 const grades = [
-  'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+  'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
 ];
 
 const InputForm: React.FC<InputFormProps> = ({ inputs, onInputChange, onGenerate, isLoading }) => {

@@ -1,10 +1,9 @@
 import React, { useRef, useState } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import LatexRenderer from './LatexRenderer';
 import { generateLessonPlanDocx } from '../utils/exportUtils';
+import { downloadAsPDF } from '../utils/downloadUtils';
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -41,38 +40,9 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan, title }) => {
     setIsDownloading('pdf');
 
     try {
-      const canvas = await html2canvas(printablePlanRef.current, { 
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-      });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.9);
-      const pdf = new jsPDF('p', 'px', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      const imgProps = pdf.getImageProperties(imgData);
-      const ratio = imgProps.height / imgProps.width;
-      const imgHeight = pdfWidth * ratio;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = position - pdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-      
-      pdf.save(`${title.replace(/\s+/g, '_')}-lesson-plan.pdf`);
+      await downloadAsPDF(printablePlanRef.current, `${title.replace(/\s+/g, '_')}-lesson-plan`);
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Failed to generate PDF. Please try again.");
+      // Error handling is done in the utility function
     } finally {
       setIsDownloading(null);
     }

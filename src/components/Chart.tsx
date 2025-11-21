@@ -1,8 +1,9 @@
 
 import React, { useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
 import type { ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
+import { downloadAsImage } from '../utils/downloadUtils';
+import Spinner from './Spinner';
 
 interface ChartProps {
   chartData: ChartData;
@@ -15,23 +16,17 @@ const Chart: React.FC<ChartProps> = ({ chartData, showControls = true }) => {
 
   const handleDownload = async () => {
     if (!chartContainerRef.current) return;
+    
     setIsDownloading(true);
-
+    
     try {
-      const canvas = await html2canvas(chartContainerRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff', // Set a white background
-      });
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `${chartData.title.replace(/\s+/g, '_')}-chart.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await downloadAsImage(
+        chartContainerRef.current,
+        `${chartData.title.replace(/\s+/g, '_')}-chart`,
+        'png'
+      );
     } catch (error) {
-      console.error("Failed to download chart:", error);
-      alert("Could not download the chart.");
+      // Error handling is done in the utility function
     } finally {
       setIsDownloading(false);
     }
@@ -349,10 +344,7 @@ const Chart: React.FC<ChartProps> = ({ chartData, showControls = true }) => {
         >
           <div className="h-5 w-5 mr-2">
             {isDownloading ? (
-              <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+              <Spinner />
             ) : (
               <DownloadIcon />
             )}

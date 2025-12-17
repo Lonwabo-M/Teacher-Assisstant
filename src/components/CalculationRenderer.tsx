@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { preRenderLatex } from '../utils/latexUtils';
 
@@ -11,7 +12,6 @@ const CalculationRenderer: React.FC<CalculationRendererProps> = ({ content, clas
   if (!content) return null;
 
   // Pre-process the string to enforce newlines between consecutive block equations.
-  // This corrects AI generation errors where multiple \\[...\\] blocks are on the same line.
   const formattedContent = content.replace(/\\\]\s*\\\[/g, '\\]\n\\[');
 
   // Split content into individual lines to handle text and block equations separately.
@@ -24,25 +24,23 @@ const CalculationRenderer: React.FC<CalculationRendererProps> = ({ content, clas
 
         // Check if the line is exclusively a block-level LaTeX equation.
         if (trimmedLine.startsWith('\\[') && trimmedLine.endsWith('\\]')) {
-          // Render it directly. preRenderLatex will handle the KaTeX conversion,
-          // and the displayMode will ensure it is centered.
           return (
             <div
               key={index}
+              className="print-item"
               dangerouslySetInnerHTML={{ __html: preRenderLatex(trimmedLine) }}
             />
           );
         } else if (trimmedLine) {
           // This is a line of text, which may itself contain inline LaTeX.
-          // Render it inside a paragraph to ensure it's a block element and left-aligned by default.
           return (
             <p
               key={index}
+              className="print-item"
               dangerouslySetInnerHTML={{ __html: preRenderLatex(line) }}
             />
           );
         }
-        // Ignore empty lines to prevent excessive vertical space.
         return null;
       })}
     </div>

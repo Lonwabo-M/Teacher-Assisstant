@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { LessonData, Worksheet as WorksheetType } from '../types';
 import LessonPlan from './LessonPlan';
@@ -46,7 +47,7 @@ const LessonOutput: React.FC<LessonOutputProps> = ({ data, onUpdate }) => {
       case 'worksheet':
         return <Worksheet worksheet={data.worksheet} onUpdate={handleWorksheetUpdate} chartData={data.chartData} />;
       case 'notes':
-        return <Notes notes={data.notes} title={lessonTitle} />;
+        return <Notes notes={data.notes} title={lessonTitle} inputs={data.inputs} />;
       case 'chart':
         return data.chartData ? <Chart chartData={data.chartData} /> : null;
       default:

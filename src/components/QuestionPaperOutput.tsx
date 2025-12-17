@@ -1,12 +1,13 @@
+
 import React, { useState, useRef } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { QuestionPaperData, DiagramLabel, Coverup, Arrow, ProjectilePath, ExamQuestion } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import LatexRenderer from './LatexRenderer';
 import Chart from './Chart';
 import CalculationRenderer from './CalculationRenderer';
 import DiagramEditor from './DiagramEditor';
+import { downloadPdf } from '../utils/downloadUtils';
+import { Spinner } from './Spinner';
 
 interface QuestionPaperOutputProps {
   data: QuestionPaperData;
@@ -47,7 +48,7 @@ const PrintablePaper: React.FC<{ data: QuestionPaperData, isMemo: boolean, label
   }
 
   const SourcesBlock = () => (
-    <div className="my-8 p-6 border-2 border-slate-300 bg-slate-50 rounded-lg" style={{ breakInside: 'avoid', breakAfter: 'page' }}>
+    <div className="my-8 p-6 border-2 border-slate-300 bg-slate-50 rounded-lg print-item" style={{ breakInside: 'avoid', breakAfter: 'page' }}>
       <h3 className="text-xl font-bold text-center text-slate-700 mb-4">SOURCE MATERIAL</h3>
       {sources.map((source, index) => (
         <div key={index} className="mb-6">
@@ -122,7 +123,7 @@ const PrintablePaper: React.FC<{ data: QuestionPaperData, isMemo: boolean, label
            }
 
            return (
-              <div key={originalIndex} className="pt-8" style={{ breakInside: 'avoid-page' }}>
+              <div key={originalIndex} className="pt-8 print-item" style={{ breakInside: 'avoid-page' }}>
                   <h3 className="text-lg font-bold text-slate-800 border-t-2 border-slate-400 pt-4 flex justify-between">
                       <LatexRenderer as="span" content={headingNumber.toUpperCase()} />
                       {sectionMarks > 0 && <span>[{sectionMarks}]</span>}
@@ -138,7 +139,7 @@ const PrintablePaper: React.FC<{ data: QuestionPaperData, isMemo: boolean, label
          
          if (q.markAllocation > 0) {
            return (
-            <div key={originalIndex} className="flex items-start py-1" style={{ breakInside: 'avoid' }}>
+            <div key={originalIndex} className="flex items-start py-1 print-item" style={{ breakInside: 'avoid' }}>
               <div className="w-24 flex-shrink-0 font-semibold pr-2 text-right">
                 {q.questionNumber}
               </div>
@@ -158,17 +159,17 @@ const PrintablePaper: React.FC<{ data: QuestionPaperData, isMemo: boolean, label
 
   return (
     <div className="p-10 bg-white font-serif text-black" style={{ width: '800px', fontSize: '12pt', lineHeight: 1.5 }}>
-      <h1 className="text-center mb-2 font-bold" style={{ fontSize: '20pt' }}>{title}</h1>
-      {isMemo && <h2 className="text-center mb-8 font-bold text-red-700" style={{ fontSize: '16pt' }}>MEMORANDUM</h2>}
+      <h1 className="text-center mb-2 font-bold print-item" style={{ fontSize: '20pt' }}>{title}</h1>
+      {isMemo && <h2 className="text-center mb-8 font-bold text-red-700 print-item" style={{ fontSize: '16pt' }}>MEMORANDUM</h2>}
       
       {!isMemo ? (
         <>
-          <div className="flex justify-between items-center my-6 pb-4 border-b-2 border-slate-300">
+          <div className="flex justify-between items-center my-6 pb-4 border-b-2 border-slate-300 print-item">
             <span className="font-semibold">Subject: {data.inputs.subject}</span>
             <span className="font-semibold">Grade: {data.inputs.grade}</span>
             <span className="font-semibold">Total Marks: {totalMarks}</span>
           </div>
-          <div className="mb-8">
+          <div className="mb-8 print-item">
             <h3 className="font-bold text-lg mb-2">INSTRUCTIONS AND INFORMATION</h3>
             <ol className="list-decimal list-inside space-y-1">
               {instructions.map((inst, i) => <li key={i}>{inst}</li>)}
@@ -191,9 +192,9 @@ const PrintablePaper: React.FC<{ data: QuestionPaperData, isMemo: boolean, label
         </>
       ) : (
          <div className="space-y-4 mt-12">
-           <h2 className="text-center font-bold text-xl border-y-2 py-2 border-slate-400">MEMORANDUM</h2>
+           <h2 className="text-center font-bold text-xl border-y-2 py-2 border-slate-400 print-item">MEMORANDUM</h2>
            {questions.filter(q => q.markAllocation > 0).map((q, index) => (
-              <div key={`memo-${index}`} className="flex items-start py-2 border-b border-slate-200" style={{ breakInside: 'avoid' }}>
+              <div key={`memo-${index}`} className="flex items-start py-2 border-b border-slate-200 print-item" style={{ breakInside: 'avoid' }}>
                 <div className="w-24 flex-shrink-0 font-semibold pr-2 text-right">{q.questionNumber}</div>
                 <div className="flex-grow">
                   <CalculationRenderer content={q.answer} />
@@ -246,36 +247,13 @@ const QuestionPaperOutput: React.FC<QuestionPaperOutputProps> = ({ data, onUpdat
     if (!printableRef.current) return;
     setIsDownloading(true);
 
-    // Temporarily render the active tab's printable version
-    const container = printableRef.current;
-    
     try {
-        const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const pdf = new jsPDF('p', 'px', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const margin = 40; // 40px margin
-        
-        const imgProps = pdf.getImageProperties(imgData);
-        const contentWidth = pdfWidth - margin * 2;
-        const totalImageHeight = (imgProps.height * contentWidth) / imgProps.width;
-        
-        let heightLeft = totalImageHeight;
-        let position = 0;
-        const pageContentHeight = pdfHeight - margin * 2;
-
-        pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, totalImageHeight);
-        heightLeft -= pageContentHeight;
-
-        while (heightLeft > 0) {
-            position -= pageContentHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'JPEG', margin, position + margin, contentWidth, totalImageHeight);
-            heightLeft -= pageContentHeight;
-        }
-
-        pdf.save(`${data.title.replace(/\s+/g, '_')}_${activeTab}.pdf`);
+        await downloadPdf({
+            filename: `${data.title.replace(/\s+/g, '_')}_${activeTab}.pdf`,
+            element: printableRef.current,
+            orientation: 'p',
+            margin: 40
+        });
     } catch (error) {
         console.error("PDF generation failed:", error);
         alert("Failed to generate PDF. Please try again.");
@@ -307,10 +285,7 @@ const QuestionPaperOutput: React.FC<QuestionPaperOutputProps> = ({ data, onUpdat
             >
               <div className="h-5 w-5 mr-2">
                 {isDownloading ? (
-                    <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <Spinner className="h-full w-full" />
                 ) : (
                     <DownloadIcon />
                 )}

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { DiagramLabel, Coverup, Arrow, ProjectilePath } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
@@ -35,16 +36,9 @@ const getProjectilePathD = (path: ProjectilePath, containerHeight: number | null
     const y2_abs = path.y2 / 100 * containerHeight;
     const peakY_abs = path.peakY / 100 * containerHeight;
 
-    const h = (path.x1 + path.x2) / 2; // Control point x is midpoint for a symmetric curve
-    const k = peakY_abs;               // Control point y needs to be calculated based on desired peak
+    const h = (path.x1 + path.x2) / 2;
+    const k = peakY_abs;
 
-    // For a quadratic Bezier curve M(t) = (1-t)^2*P0 + 2t(1-t)*P1 + t^2*P2,
-    // the peak (for a vertical parabola) is at t=0.5.
-    // The y of the peak is (y0/4) + (y1/2) + (y2/4).
-    // Let's solve for the control point's y (cy) to achieve the desired peakY.
-    // The peak of the quadratic Bezier curve is not the control point itself.
-    // Peak Y position = 0.25*y1 + 0.5*cy + 0.25*y2
-    // So, peakY = 0.25*path.y1 + 0.5*cy_percentage + 0.25*path.y2
     const cy_percentage = (peakY_abs - 0.25 * y1_abs - 0.25 * y2_abs) / 0.5;
     const cy = cy_percentage / containerHeight * 100;
 
@@ -94,7 +88,7 @@ const DiagramEditor: React.FC<DiagramEditorProps> = ({
     onLabelsChange(labels.map((l, i) => {
         if (i === index) {
             const currentSize = l.size || 100;
-            const newSize = Math.max(50, currentSize + change); // Min size 50%
+            const newSize = Math.max(50, currentSize + change);
             return { ...l, size: newSize };
         }
         return l;
@@ -122,7 +116,7 @@ const DiagramEditor: React.FC<DiagramEditorProps> = ({
     try {
       const newImage = await regenerateDiagramImage(imageData, refinementPrompt);
       onImageUpdate(newImage);
-      setRefinementPrompt(''); // Clear prompt
+      setRefinementPrompt('');
     } catch (error: any) {
       console.error("Failed to regenerate diagram:", error);
       alert(`Sorry, the diagram could not be regenerated. ${error.message}`);
@@ -257,7 +251,7 @@ const DiagramEditor: React.FC<DiagramEditorProps> = ({
   };
 
   useEffect(() => {
-    return () => { // Cleanup listeners on unmount
+    return () => {
         window.removeEventListener('mousemove', handleDragging);
         window.removeEventListener('mouseup', handleDragEnd);
     };
@@ -324,7 +318,7 @@ const DiagramEditor: React.FC<DiagramEditorProps> = ({
         </div>
       )}
 
-      <div ref={containerRef} className="relative w-full max-w-full mx-auto select-none border-2 border-dashed border-slate-300 rounded-lg overflow-hidden">
+      <div ref={containerRef} className="relative w-full max-w-full mx-auto select-none border-2 border-dashed border-slate-300 rounded-lg overflow-hidden print-item">
         <img src={`data:${mimeType};base64,${imageData}`} alt="Generated Diagram" className="w-full h-auto block" />
 
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" style={{pointerEvents: isEditing ? 'auto' : 'none'}}>
@@ -334,7 +328,7 @@ const DiagramEditor: React.FC<DiagramEditorProps> = ({
                 </marker>
             </defs>
             {projectilePaths.map(path => (
-                <path key={path.id} d={getProjectilePathD(path, containerRef.current?.clientHeight)} stroke="#f59e0b" strokeWidth="0.5" fill="none" strokeDasharray="1,1" />
+                <path key={path.id} d={getProjectilePathD(path, containerRef.current?.clientHeight || 0)} stroke="#f59e0b" strokeWidth="0.5" fill="none" strokeDasharray="1,1" />
             ))}
             {arrows.map(arrow => (
                 <line key={arrow.id} x1={arrow.x1} y1={arrow.y1} x2={arrow.x2} y2={arrow.y2} stroke="#0ea5e9" strokeWidth="0.5" markerEnd="url(#arrowhead)" />

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { preRenderLatex } from '../utils/latexUtils';
 import { parseSimpleMarkdown } from '../utils/markdownUtils';
@@ -10,16 +11,34 @@ interface LatexRendererProps {
 }
 
 const LatexRenderer: React.FC<LatexRendererProps & React.HTMLAttributes<HTMLElement>> = ({ content, className, as: Component = 'div', enableMarkdown = false, ...props }) => {
-  // Pre-render the content string, converting any LaTeX into HTML markup.
-  let processedContent = content;
-  if (enableMarkdown) {
-    processedContent = parseSimpleMarkdown(processedContent);
-  }
-  const renderedHtml = preRenderLatex(processedContent);
+  // Robustness check for non-string content
+  if (content === undefined || content === null) return null;
+  let processedContent = String(content);
 
-  // We use dangerouslySetInnerHTML because the content from the Gemini API can include
-  // HTML tags like <strong>, <ul>, etc., and now the rendered KaTeX HTML.
-  return <Component className={className} dangerouslySetInnerHTML={{ __html: renderedHtml }} {...props} />;
+  if (enableMarkdown && processedContent) {
+      const latexMap = new Map<string, string>();
+      let latexIndex = 0;
+      const latexRegex = /\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|\$\$([\s\S]*?)\$\$|\$([^$\n]+?)\$/g;
+
+      const protectedContent = processedContent.replace(latexRegex, (match, p1, p2, p3, p4) => {
+          if (p4 && /^\d+(\.\d{2})?$/.test(p4.trim())) {
+              return match;
+          }
+          const placeholder = `__LATEX_PLACEHOLDER_${latexIndex++}__`;
+          latexMap.set(placeholder, match);
+          return placeholder;
+      });
+
+      let markdownHtml = parseSimpleMarkdown(protectedContent);
+
+      processedContent = markdownHtml.replace(/__LATEX_PLACEHOLDER_\d+__/g, (match) => {
+          return latexMap.get(match) || match;
+      });
+  }
+
+  const finalHtml = preRenderLatex(processedContent);
+
+  return <Component className={className} dangerouslySetInnerHTML={{ __html: finalHtml }} {...props} />;
 };
 
 export default LatexRenderer;

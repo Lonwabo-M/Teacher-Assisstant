@@ -1,10 +1,11 @@
+
 import React, { useRef, useState } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { LessonPlanSection } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import LatexRenderer from './LatexRenderer';
 import { generateLessonPlanDocx } from '../utils/exportUtils';
+import { downloadPdf } from '../utils/downloadUtils';
+import { Spinner } from './Spinner';
 
 interface LessonPlanProps {
   plan: LessonPlanSection[];
@@ -17,10 +18,10 @@ const PrintableLessonPlan: React.FC<{ plan: LessonPlanSection[] }> = ({ plan }) 
     className="p-10 bg-white font-serif text-black"
     style={{ width: '800px', fontSize: '12pt' }}
   >
-    <h1 className="text-center font-bold mb-10" style={{ fontSize: '24pt' }}>Lesson Plan</h1>
+    <h1 className="text-center font-bold mb-10 print-item" style={{ fontSize: '24pt' }}>Lesson Plan</h1>
     <div className="space-y-8">
       {(plan || []).map((section, index) => (
-        <div key={index} className="border-b-2 border-slate-200 pb-4 last:border-b-0" style={{ breakInside: 'avoid' }}>
+        <div key={index} className="border-b-2 border-slate-200 pb-4 last:border-b-0 print-item" style={{ breakInside: 'avoid' }}>
           <div className="flex justify-between items-start mb-3">
             <h3 className="font-semibold text-sky-800" style={{ fontSize: '16pt' }}>{section.title}</h3>
             <span className="text-base font-medium text-slate-600 flex-shrink-0 ml-4 bg-slate-100 px-3 py-1 rounded-md">{section.duration}</span>
@@ -41,35 +42,11 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan, title }) => {
     setIsDownloading('pdf');
 
     try {
-      const canvas = await html2canvas(printablePlanRef.current, { 
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
+      await downloadPdf({
+        filename: `${title.replace(/\s+/g, '_')}-lesson-plan.pdf`,
+        element: printablePlanRef.current,
+        orientation: 'p'
       });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.9);
-      const pdf = new jsPDF('p', 'px', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      const imgProps = pdf.getImageProperties(imgData);
-      const ratio = imgProps.height / imgProps.width;
-      const imgHeight = pdfWidth * ratio;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = position - pdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-      
-      pdf.save(`${title.replace(/\s+/g, '_')}-lesson-plan.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");
@@ -111,10 +88,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan, title }) => {
               >
                 <div className="h-5 w-5 mr-2">
                   {isDownloading === 'docx' ? (
-                    <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="http://www.w3.org/2000/svg">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <Spinner className="h-full w-full" />
                   ) : (
                     <DownloadIcon />
                   )}
@@ -129,10 +103,7 @@ const LessonPlan: React.FC<LessonPlanProps> = ({ plan, title }) => {
               >
                 <div className="h-5 w-5 mr-2">
                   {isDownloading === 'pdf' ? (
-                    <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="http://www.w3.org/2000/svg">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <Spinner className="h-full w-full" />
                   ) : (
                     <DownloadIcon />
                   )}

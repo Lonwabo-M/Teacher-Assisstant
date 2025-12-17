@@ -1,16 +1,38 @@
 import React, { useRef, useState } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { Slide, UserInputs, ChartData } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import Chart from './Chart';
 import LatexRenderer from './LatexRenderer';
+import { downloadSlidesPdf } from '../utils/downloadUtils';
+import { Spinner } from './Spinner';
 
 interface SlidesProps {
   slides: Slide[];
   inputs: UserInputs;
   chartData?: ChartData;
 }
+
+// Helper to group content lines if they are part of a table
+const groupContentLines = (content: string[]) => {
+    const grouped: string[] = [];
+    let tableBuffer: string[] = [];
+
+    content.forEach(line => {
+        if (line.trim().startsWith('|')) {
+            tableBuffer.push(line);
+        } else {
+            if (tableBuffer.length > 0) {
+                grouped.push(tableBuffer.join('\n'));
+                tableBuffer = [];
+            }
+            grouped.push(line);
+        }
+    });
+    if (tableBuffer.length > 0) {
+        grouped.push(tableBuffer.join('\n'));
+    }
+    return grouped;
+};
 
 // A new component specifically for creating a printable, landscape A4 page for each slide.
 const PrintableSlidePage: React.FC<{
@@ -19,6 +41,8 @@ const PrintableSlidePage: React.FC<{
   total: number;
   inputs: UserInputs;
 }> = ({ slide, index, total, inputs }) => {
+  const processedContent = groupContentLines(slide.content);
+
   return (
     <div
       className="printable-slide-page bg-white p-8 flex flex-col justify-between"
@@ -37,9 +61,35 @@ const PrintableSlidePage: React.FC<{
             <p>Grade: {inputs.grade} ({inputs.standard})</p>
           </div>
         ) : (
-          <ul className="text-3xl list-disc list-outside pl-8 space-y-4 text-left max-w-4xl">
-            {slide.content.map((point, i) => <LatexRenderer as="li" key={i} content={point} enableMarkdown={true} />)}
-          </ul>
+          <div className="text-3xl space-y-4 text-left max-w-4xl w-full">
+            <div className="space-y-4">
+            {processedContent.map((point, i) => {
+                 const isTable = point.trim().startsWith('|');
+                 if (isTable) {
+                    return (
+                        <LatexRenderer 
+                            as="div" 
+                            key={i} 
+                            content={point} 
+                            enableMarkdown={true}
+                            className="w-full" 
+                        />
+                    );
+                 }
+                 return (
+                    <div key={i} className="flex items-start">
+                        <span className="mr-3 mt-3 h-2 w-2 flex-shrink-0 rounded-full bg-slate-600" />
+                        <LatexRenderer 
+                            as="div" 
+                            content={point} 
+                            enableMarkdown={true}
+                            className="flex-1" 
+                        />
+                    </div>
+                 )
+            })}
+            </div>
+          </div>
         )}
       </div>
 
@@ -69,35 +119,12 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
     if (!printableContainerRef.current) return;
     setIsDownloading(true);
 
-    const pdf = new jsPDF({
-      orientation: 'landscape',
-      unit: 'px',
-      format: 'a4',
-    });
-
-    const slideElements = Array.from(printableContainerRef.current.querySelectorAll<HTMLElement>('.printable-slide-page'));
-    
     try {
-      for (let i = 0; i < slideElements.length; i++) {
-        const slideElement = slideElements[i];
-        
-        const canvas = await html2canvas(slideElement, { 
-          scale: 2, // Scale 2 is sufficient for landscape and faster
-          logging: false,
-          useCORS: true,
-          backgroundColor: '#ffffff',
+        await downloadSlidesPdf({
+            filename: 'presentation-slides.pdf',
+            container: printableContainerRef.current,
+            slideSelector: '.printable-slide-page'
         });
-        
-        const imgData = canvas.toDataURL('image/jpeg', 0.9);
-        
-        if (i > 0) {
-          pdf.addPage();
-        }
-        
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
-      }
-      
-      pdf.save('presentation-slides.pdf');
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");
@@ -133,10 +160,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
           >
             <div className="h-5 w-5 mr-2">
               {isDownloading ? (
-                <svg className="animate-spin h-full w-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <Spinner className="h-full w-full" />
               ) : (
                 <DownloadIcon />
               )}
@@ -145,7 +169,10 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {slides.map((slide, index) => (
+          {slides.map((slide, index) => {
+            const processedContent = groupContentLines(slide.content);
+            
+            return (
             <div key={index} className="flex flex-col bg-white p-6 rounded-lg shadow-md border border-slate-200">
               <div className="relative flex-shrink-0">
                 <LatexRenderer as="h3" content={slide.title} className="text-2xl font-bold text-sky-800 pr-16 z-10 relative" />
@@ -157,19 +184,41 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
               <div className="flex-grow space-y-3 mt-4">
                 <LatexRenderer as="p" content={`<strong>Key Concept:</strong> ${slide.keyConcept}`} className="text-md text-slate-500 italic" />
                 
-                <ul className="list-disc list-outside pl-5 text-slate-700 space-y-2 pt-2">
+                <div className="text-slate-700 space-y-2 pt-2">
                   {index === 0 ? (
-                    <>
+                    <ul className="list-disc list-outside ml-5">
                       <li>Subject: {inputs.subject}</li>
                       <li>Grade: {inputs.grade} ({inputs.standard})</li>
                       <li>Teacher: [Your Name]</li>
-                    </>
+                    </ul>
                   ) : (
-                    slide.content.map((point, pointIndex) => (
-                      <LatexRenderer as="li" key={pointIndex} content={point} enableMarkdown={true} />
-                    ))
+                    processedContent.map((point, pointIndex) => {
+                        const isTable = point.trim().startsWith('|');
+                        if (isTable) {
+                             return (
+                                 <LatexRenderer 
+                                    as="div" 
+                                    key={pointIndex} 
+                                    content={point} 
+                                    enableMarkdown={true} 
+                                    className="w-full my-4 overflow-x-auto"
+                                 />
+                            )
+                        }
+                        return (
+                             <div key={pointIndex} className="flex items-start">
+                                <span className="mr-2 mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                                <LatexRenderer 
+                                    as="div"
+                                    content={point} 
+                                    enableMarkdown={true} 
+                                    className="flex-1"
+                                 />
+                             </div>
+                        )
+                    })
                   )}
-                </ul>
+                </div>
               </div>
               {slide.speakerNotes && (
                 <div className="mt-4 pt-3 border-t border-slate-200">
@@ -181,7 +230,7 @@ const Slides: React.FC<SlidesProps> = ({ slides, inputs, chartData }) => {
                 </div>
               )}
             </div>
-          ))}
+          )})}
 
           {chartData && (
             <div className="flex flex-col bg-white p-6 rounded-lg shadow-md border border-slate-200 min-h-[400px]">

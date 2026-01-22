@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { generateLesson, generateQuestionPaper } from './services/geminiService';
 import type { HistoryItem, UserInputs, QuestionPaperInputs, LessonData, QuestionPaperData } from './types';
@@ -58,12 +59,13 @@ const App: React.FC = () => {
         data = await generateQuestionPaper(inputs as QuestionPaperInputs);
       }
       
-      const newItem: HistoryItem = {
+      // Fix: Resolve HistoryItem assignment error by using a cast to handle union type property mapping
+      const newItem = {
         ...data,
         id: Date.now().toString(),
         inputs,
-        type: generationMode, // FIX: Added type to ensure history item is correctly identified
-      };
+        type: generationMode, 
+      } as HistoryItem;
       
       setActiveItem(newItem);
       setHistory(prevHistory => [newItem, ...prevHistory.slice(0, 19)]);

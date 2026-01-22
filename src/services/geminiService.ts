@@ -259,95 +259,67 @@ const paperMemoSchema = {
     required: ["answers"]
 };
 
+/**
+ * Sanitizes LaTeX output from the model by fixing common delimiter hallucinations
+ * and cleaning up nested syntax that crashes KaTeX.
+ */
 const cleanLatexInObject = (obj: any): any => {
-  if (obj === undefined || obj === null) return obj;
-  if (typeof obj === 'string') {
-    let str = obj;
-
-    // 1. Fix Hallucinated nested block math often used by AI for annotations
-    // v_f = v_i + a\[\text{vertical}\] -> v_f = v_i + a[\text{vertical}]
-    str = str.replace(/\\\[([\s\S]*?)\\\]/g, (match, content) => {
-        // If it looks like a simple text annotation, use literal brackets
-        if (content.trim().startsWith('\\text{') && !content.includes('\\frac') && content.length < 100) {
-            return `[${content}]`;
-        }
-        return match;
-    });
-
-    // 2. Fix Double Superscripts/Subscripts that KaTeX hates
-    str = str.replace(/(\d+|[a-zA-Z])\^\s*([a-zA-Z0-9])\^\s*\{-1\}/g, "$1^{$2-1}");
-    str = str.replace(/(\^)\s*([a-zA-Z0-9]+)\s*(\^)/g, "$1{$2}$3");
-
-    // 3. Improve Units Formatting
-    str = str.replace(/(\\cdot\s*|\\times\s*|= \s*)([A-Z][a-z]{2,})/g, "$1\\text{$2}");
-    str = str.replace(/([A-Z][a-z]{2,})(\s*\^|\s*\\cdot|\s*\\times|\s*^{-1})/g, "\\text{$1}$2");
-    
-    // 4. Recursive Text Cleaning
-    let iterations = 0;
-    while (/\\text\{[^{}]*(\\|\\cdot|\\times)[^{}]*\}/.test(str) && iterations < 5) {
-         str = str.replace(/\\text\{([^{}]*?)(\\cdot|\\times)(\{\})?([^{}]*?)\}/g, "\\text{$1}$2\\text{$4}");
-         iterations++;
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'string') {
+        let str = obj;
+        // Fix hallucinated nested block delimiters inside text annotations
+        // v_f = v_i + a\[\text{vertical}\] -> v_f = v_i + a[\text{vertical}]
+        str = str.replace(/\\\[([\s\S]*?)\\\]/g, (match, content) => {
+            if (content.trim().startsWith('\\text{') && content.length < 100) {
+                return `[${content}]`;
+            }
+            return match;
+        });
+        // Remove literal tabs or weird non-breaking space characters that AI sometimes emits
+        return str.replace(/\t/g, ' ').replace(/\u00A0/g, ' ');
     }
-    
-    str = str.replace(/\\text\{\s*\}/g, "");
-
-    // 5. Ensure Correct Delimiters
-    str = str.replace(/\$\$(.*?)\$\$/gs, "\\[$1\\]");
-    str = str.replace(/([^\d]|^)\$([^$]+?)\$([^\d]|$)/g, (match, prefix, content, suffix) => {
-        if (/^\d+(\.\d{2})?$/.test(content.trim())) return match;
-        return `${prefix}\\(${content}\\)${suffix}`;
-    });
-    str = str.replace(/\\\s+\[/g, '\\[').replace(/\\\s+\]/g, '\\]');
-    str = str.replace(/\\\s+\(/g, '\\(').replace(/\\\s+\)/g, '\\)');
-    return str;
-  }
-  if (Array.isArray(obj)) return obj.map(cleanLatexInObject);
-  if (typeof obj === 'object' && obj !== null) {
-     const newObj: any = {};
-     for (const key in obj) newObj[key] = cleanLatexInObject(obj[key]);
-     return newObj;
-  }
-  return obj;
-}
+    if (Array.isArray(obj)) return obj.map(cleanLatexInObject);
+    if (typeof obj === 'object') {
+        const newObj: any = {};
+        for (const key in obj) {
+            newObj[key] = cleanLatexInObject(obj[key]);
+        }
+        return newObj;
+    }
+    return obj;
+};
 
 const parseJsonSafe = (text: string | undefined): any => {
     if (!text) return null;
     try {
         let cleanText = text.trim();
-        // Remove common non-JSON prefixes/suffixes
+        // Remove markdown wrappers
         cleanText = cleanText.replace(/^```json\s*/i, '').replace(/```\s*$/g, '').trim();
+        // Remove raw control characters (except newline, tab) that break JSON.parse
+        // This handles cases where models include unescaped tabs or low-ASCII chars
+        cleanText = cleanText.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, '');
         
-        // Strip problematic raw control characters (except allowed ones like \n, \r)
-        // Literal tabs (\t) and other low ASCII control chars break JSON.parse
-        cleanText = cleanText.replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F]/g, (c) => {
-            if (c === '\t') return ' '; // Replace tab with space
-            return ''; // Strip others
-        });
-
-        // Find the actual JSON structure
+        // Final attempt to locate the JSON block if text includes conversational preamble
         const firstBrace = cleanText.indexOf('{');
         const firstBracket = cleanText.indexOf('[');
-        let start = -1;
-        if (firstBrace !== -1 && firstBracket !== -1) start = Math.min(firstBrace, firstBracket);
-        else if (firstBrace !== -1) start = firstBrace;
-        else if (firstBracket !== -1) start = firstBracket;
+        const start = (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) ? firstBrace : firstBracket;
         
         const lastBrace = cleanText.lastIndexOf('}');
         const lastBracket = cleanText.lastIndexOf(']');
-        const end = Math.max(lastBrace, lastBracket);
+        const end = (lastBrace !== -1 && (lastBracket === -1 || lastBrace > lastBracket)) ? lastBrace : lastBracket;
 
         if (start !== -1 && end !== -1 && start < end) {
             cleanText = cleanText.substring(start, end + 1);
         }
-        
+
         return JSON.parse(cleanText);
     } catch (e) {
-        console.error("JSON Parsing failed for text:", text?.substring(0, 150) + "...");
+        console.error("Failed to parse JSON text from AI response:", text);
         return null;
     }
 }
 
-const generateWithRetry = async (model: string, prompt: string, schema: any, retries = 2): Promise<any> => {
+const generateWithRetry = async (model: string, prompt: string, schema: any, taskLabel: string, retries = 2): Promise<any> => {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await ai.models.generateContent({
@@ -355,48 +327,53 @@ const generateWithRetry = async (model: string, prompt: string, schema: any, ret
         contents: prompt,
         config: { 
             responseMimeType: "application/json", 
-            responseSchema: schema, 
-            maxOutputTokens: 8192 
+            responseSchema: schema,
         }
       });
-      
       const parsed = parseJsonSafe(response.text);
       if (parsed) return parsed;
-      
-      console.warn(`Attempt ${attempt + 1} failed to parse JSON. Retrying...`);
-    } catch (e) {
-      console.warn(`Attempt ${attempt + 1} failed with error:`, e);
+      console.warn(`Attempt ${attempt + 1} for "${taskLabel}" failed: JSON parse error.`);
+    } catch (e: any) {
+      console.warn(`Attempt ${attempt + 1} for "${taskLabel}" failed:`, e.message);
     }
   }
   return null;
 };
 
 export const generateLesson = async (inputs: UserInputs): Promise<LessonData> => {
-  const referenceContext = inputs.goals ? `\nSTRICT REFERENCE MATERIAL (Use this for content):\n"${inputs.goals}"\n` : '';
+  const proModel = 'gemini-3-pro-preview';
+  const flashModel = 'gemini-3-flash-preview';
+  
+  const referenceContext = inputs.goals ? `\nSTRICT REFERENCE MATERIAL (BASE CONTENT ON THIS):\n"${inputs.goals}"\n` : '';
 
-  const planPrompt = `${CAPS_INSTRUCTION}\nTask: Create a lesson plan.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\nCheck for mismatch between grade/subject and content.\n${MATH_FORMATTING_PROMPT}`;
-  const slidesPrompt = `${CAPS_INSTRUCTION}\nTask: Create presentation slides.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\nFocus on key concepts and definitions.\n${MATH_FORMATTING_PROMPT}`;
-  const worksheetPrompt = `${CAPS_INSTRUCTION}\nTask: Create a worksheet (Questions & Sections only).\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\nInclude varied question types.\nIMPORTANT: Do NOT generate diagram data or chart data here.\n${MATH_FORMATTING_PROMPT}`;
-  const visualsPrompt = `${CAPS_INSTRUCTION}\nTask: Generate metadata for visuals (Diagram labels, Chart data).\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\nContext: ${inputs.goals.substring(0, 1000)}...\nUSER SETTINGS:\n- Generate Diagram: ${inputs.generateDiagram}\n- Include Chart: ${inputs.includeChart}`;
-  const notesPrompt = `${CAPS_INSTRUCTION}\nTask: Write COMPREHENSIVE, TEXTBOOK-QUALITY student notes.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\n${MATH_FORMATTING_PROMPT}`;
+  const planPrompt = `${CAPS_INSTRUCTION}\nTask: Create a lesson plan.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\n${MATH_FORMATTING_PROMPT}`;
+  const slidesPrompt = `${CAPS_INSTRUCTION}\nTask: Create presentation slides.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\n${MATH_FORMATTING_PROMPT}`;
+  const worksheetPrompt = `${CAPS_INSTRUCTION}\nTask: Create a worksheet.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\n${MATH_FORMATTING_PROMPT}`;
+  const visualsPrompt = `${CAPS_INSTRUCTION}\nTask: Generate metadata for visuals.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}. Settings: Diagram: ${inputs.generateDiagram}, Chart: ${inputs.includeChart}`;
+  const notesPrompt = `${CAPS_INSTRUCTION}\nTask: Write student notes.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}.\n${referenceContext}\n${MATH_FORMATTING_PROMPT}`;
 
+  // Pro is used for high-logic/reasoning parts (Plan, Notes)
+  // Flash is used for structured output parts (Slides, Worksheet, Visuals) for speed and reliability
   const [planData, slidesData, worksheetData, visualsData, notesData] = await Promise.all([
-    generateWithRetry('gemini-2.5-flash', planPrompt, lessonPlanSchema),
-    generateWithRetry('gemini-2.5-flash', slidesPrompt, slidesSchema),
-    generateWithRetry('gemini-2.5-flash', worksheetPrompt, worksheetContentSchema),
-    generateWithRetry('gemini-2.5-flash', visualsPrompt, visualsSchema),
-    generateWithRetry('gemini-2.5-flash', notesPrompt, notesSchema),
+    generateWithRetry(proModel, planPrompt, lessonPlanSchema, "Lesson Plan"),
+    generateWithRetry(flashModel, slidesPrompt, slidesSchema, "Slides"),
+    generateWithRetry(flashModel, worksheetPrompt, worksheetContentSchema, "Worksheet"),
+    generateWithRetry(flashModel, visualsPrompt, visualsSchema, "Visuals Metadata"),
+    generateWithRetry(proModel, notesPrompt, notesSchema, "Student Notes"),
   ]);
 
   if (!planData || !slidesData || !worksheetData || !visualsData || !notesData) {
-      throw new Error("One or more AI responses were incomplete. Please try again or reduce the content scope.");
+      const failed = [];
+      if (!planData) failed.push("Lesson Plan");
+      if (!slidesData) failed.push("Slides");
+      if (!worksheetData) failed.push("Worksheet");
+      if (!visualsData) failed.push("Visuals");
+      if (!notesData) failed.push("Student Notes");
+      
+      throw new Error(`AI generation incomplete for components: ${failed.join(', ')}. This usually happens due to API timeouts. Please try again.`);
   }
 
-  if (!inputs.includeChart) {
-    visualsData.chartData = null;
-  }
-
-  const mergedWorksheet = {
+  const worksheet = {
       ...worksheetData.worksheet,
       diagramLabels: visualsData.diagramLabels,
       coverups: visualsData.coverups,
@@ -404,111 +381,87 @@ export const generateLesson = async (inputs: UserInputs): Promise<LessonData> =>
       projectilePaths: visualsData.projectilePaths,
   };
 
-  const lessonData = {
-    mismatch: planData.mismatch,
-    mismatchReason: planData.mismatchReason,
+  const rawLessonData: LessonData = {
+    type: 'lesson',
+    id: crypto.randomUUID(),
+    inputs,
     lessonPlan: planData.lessonPlan,
     slides: slidesData.slides,
-    worksheet: mergedWorksheet,
+    worksheet: worksheet,
     chartData: visualsData.chartData,
     notes: notesData.notes
   };
 
-  const cleanedLessonData = cleanLatexInObject(lessonData);
+  // Sanitize the data for LaTeX safety
+  const lessonData = cleanLatexInObject(rawLessonData);
 
-  if (inputs.generateDiagram && !cleanedLessonData.mismatch) {
+  if (inputs.generateDiagram) {
     try {
         const imagePrompt = `${DIAGRAM_STYLE_PROMPT} Subject: ${inputs.subject}. Context: ${inputs.goals.substring(0, 500)}. Create a diagram.`;
         const imageResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: imagePrompt,
         });
-        
-        const parts = imageResponse.candidates?.[0]?.content?.parts;
-        if (parts) {
-            for (const part of parts) {
-                if (part.inlineData) {
-                    cleanedLessonData.worksheet.generatedImage = {
-                        data: part.inlineData.data,
-                        mimeType: part.inlineData.mimeType
-                    };
-                    break;
-                }
-            }
+        const part = imageResponse.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+        if (part?.inlineData) {
+            lessonData.worksheet.generatedImage = {
+                data: part.inlineData.data,
+                mimeType: part.inlineData.mimeType
+            };
         }
     } catch (e) {
         console.error("Image generation failed", e);
     }
   }
 
-  return { ...cleanedLessonData, type: 'lesson' };
+  return lessonData;
 };
 
 export const generateQuestionPaper = async (inputs: QuestionPaperInputs): Promise<QuestionPaperData> => {
-    const structurePrompt = `${CAPS_INSTRUCTION}\nTask: Create a ${inputs.examType} question paper.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}. Total Marks: ${inputs.totalMarks}.\nTopics: ${inputs.topics}.\n${MATH_FORMATTING_PROMPT}`;
-    const structureData = await generateWithRetry('gemini-2.5-flash', structurePrompt, paperStructureSchema);
+    const proModel = 'gemini-3-pro-preview';
+    const flashModel = 'gemini-3-flash-preview';
+
+    const structurePrompt = `${CAPS_INSTRUCTION}\nTask: Create a ${inputs.examType} question paper.\nSubject: ${inputs.subject}. Grade: ${inputs.grade}. Topics: ${inputs.topics}. Total Marks: ${inputs.totalMarks}.\n${MATH_FORMATTING_PROMPT}`;
+    const structureData = await generateWithRetry(proModel, structurePrompt, paperStructureSchema, "Question Paper Structure");
     if (!structureData) throw new Error("Failed to generate question paper structure.");
 
-    const questionsJson = JSON.stringify(structureData.questions);
-    const visualsPrompt = `${CAPS_INSTRUCTION}\nTask: Generate diagram labels, arrows, and chart data based on these exam questions.\nQuestions: ${questionsJson}\nUSER SETTINGS:\n- Generate Diagram: ${inputs.generateDiagram}\n- Include Chart: ${inputs.includeChart}`;
-    const visualsData = await generateWithRetry('gemini-2.5-flash', visualsPrompt, visualsSchema) || { diagramLabels: [], coverups: [], arrows: [], projectilePaths: [], chartData: null };
+    const memoPrompt = `${CAPS_INSTRUCTION}\nTask: Create a detailed marking memorandum.\nQuestions: ${JSON.stringify(structureData.questions)}\n${MATH_FORMATTING_PROMPT}`;
+    const memoData = await generateWithRetry(proModel, memoPrompt, paperMemoSchema, "Memorandum");
 
-    const memoPrompt = `${CAPS_INSTRUCTION}\nTask: Create a detailed memorandum (marking guide).\nQuestions: ${questionsJson}\n${MATH_FORMATTING_PROMPT}`;
-    const memoData = await generateWithRetry('gemini-2.5-flash', memoPrompt, paperMemoSchema);
-    if (!memoData) throw new Error("Failed to generate memorandum.");
+    const rawPaperData: QuestionPaperData = {
+        type: 'paper',
+        id: crypto.randomUUID(),
+        inputs,
+        title: structureData.title,
+        instructions: structureData.instructions,
+        questions: structureData.questions.map((q: any) => ({
+            ...q,
+            answer: memoData?.answers?.find((a: any) => a.questionNumber === q.questionNumber)?.answer || "Answer not generated."
+        })),
+    };
 
-    const generatedImage = inputs.generateDiagram ? await (async () => {
-         try {
-            const imagePrompt = `${DIAGRAM_STYLE_PROMPT} Subject: ${inputs.subject}. Context: ${inputs.topics}. Create a diagram for an exam question.`;
+    const paperData = cleanLatexInObject(rawPaperData);
+
+    if (inputs.generateDiagram) {
+        try {
+            const imagePrompt = `${DIAGRAM_STYLE_PROMPT} Subject: ${inputs.subject}. Create an exam diagram for: ${inputs.topics.substring(0, 300)}`;
             const imageResponse = await ai.models.generateContent({
                 model: 'gemini-2.5-flash-image',
                 contents: imagePrompt,
             });
-            const parts = imageResponse.candidates?.[0]?.content?.parts;
-            if (parts) {
-                for (const part of parts) {
-                    if (part.inlineData) {
-                        return {
-                            data: part.inlineData.data,
-                            mimeType: part.inlineData.mimeType
-                        };
-                    }
-                }
+            const part = imageResponse.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+            if (part?.inlineData) {
+                paperData.generatedImage = {
+                    data: part.inlineData.data,
+                    mimeType: part.inlineData.mimeType
+                };
             }
         } catch (e) {
             console.error("Image generation failed", e);
-            return undefined;
         }
-    })() : undefined;
-
-    if (!inputs.includeChart) {
-      visualsData.chartData = null;
     }
 
-    const mergedQuestions: ExamQuestion[] = structureData.questions.map((q: any) => {
-        const memoItem = memoData.answers?.find((a: any) => a.questionNumber === q.questionNumber);
-        return {
-            ...q,
-            answer: memoItem ? memoItem.answer : "Answer not generated."
-        };
-    });
-
-    const paperData: QuestionPaperData = {
-        type: 'paper',
-        id: '',
-        inputs,
-        title: structureData.title,
-        instructions: structureData.instructions,
-        questions: mergedQuestions,
-        diagramLabels: visualsData.diagramLabels,
-        coverups: visualsData.coverups,
-        arrows: visualsData.arrows,
-        projectilePaths: visualsData.projectilePaths,
-        chartData: visualsData.chartData,
-        generatedImage: generatedImage
-    };
-
-    return cleanLatexInObject(paperData);
+    return paperData;
 };
 
 export const regenerateDiagramImage = async (originalImageData: string, instruction: string): Promise<{ data: string; mimeType: string }> => {
@@ -520,17 +473,7 @@ export const regenerateDiagramImage = async (originalImageData: string, instruct
             { text: prompt }
         ],
     });
-
-    const parts = response.candidates?.[0]?.content?.parts;
-    if (parts) {
-        for (const part of parts) {
-            if (part.inlineData) {
-                return {
-                    data: part.inlineData.data,
-                    mimeType: part.inlineData.mimeType
-                };
-            }
-        }
-    }
+    const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+    if (part?.inlineData) return { data: part.inlineData.data, mimeType: part.inlineData.mimeType };
     throw new Error("Failed to regenerate image");
 };

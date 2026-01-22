@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -6,37 +7,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LessonLab - AI-Powered Teaching Tools</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
     <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
-    
     <script>
-      // Set the workerSrc for pdf.js to avoid issues with loading it
       if (typeof pdfjsLib !== 'undefined') {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
       }
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.24.0",
-    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.3",
-    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
-    "katex": "https://aistudiocdn.com/katex@^0.16.25"
-  }
-}
-</script>
-<style>
-  html {
-    scroll-behavior: smooth;
-  }
-</style>
-</head>
+    <script type="importmap">
+    {
+      "imports": {
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.24.0",
+        "jspdf": "https://aistudiocdn.com/jspdf@^3.0.3",
+        "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
+        "katex": "https://aistudiocdn.com/katex@^0.16.25"
+      }
+    }
+    </script>
+    <style>html { scroll-behavior: smooth; }</style>
+  </head>
   <body class="bg-slate-50 text-slate-800">
     <div id="root"></div>
-    <script type="module" src="./src/index.tsx"></script>
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>
